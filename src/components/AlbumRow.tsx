@@ -153,7 +153,7 @@ export default function AlbumRow({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
             className="overflow-hidden"
           >
             <div className="px-3 pb-3 pt-1 flex flex-col gap-2">
@@ -181,35 +181,20 @@ export default function AlbumRow({
                   No imported tracks for this album.
                 </div>
               ) : (
-                <motion.div
-                  initial="hidden"
-                  animate="visible"
-                  variants={{
-                    hidden: {},
-                    visible: { transition: { staggerChildren: 0.03 } },
-                  }}
-                  className="flex flex-col gap-1.5"
-                >
+                <div className="flex flex-col gap-1.5">
                   {tracks.map((t) => (
-                    <motion.div
+                    <TrackRow
                       key={t.id}
-                      variants={{
-                        hidden: { opacity: 0, x: -8 },
-                        visible: { opacity: 1, x: 0 },
-                      }}
-                    >
-                      <TrackRow
-                        track={t}
-                        showAlbumCover={false}
-                        onRate={(s) => onRateTrack?.(t.id, s)}
-                        onToggleFavorite={(v) =>
-                          onToggleTrackFavorite?.(t.id, v)
-                        }
-                        onOpenDetail={() => onOpenTrackDetail?.(t.id)}
-                      />
-                    </motion.div>
+                      track={t}
+                      showAlbumCover={false}
+                      onRate={(s) => onRateTrack?.(t.id, s)}
+                      onToggleFavorite={(v) =>
+                        onToggleTrackFavorite?.(t.id, v)
+                      }
+                      onOpenDetail={() => onOpenTrackDetail?.(t.id)}
+                    />
                   ))}
-                </motion.div>
+                </div>
               )}
             </div>
           </motion.div>

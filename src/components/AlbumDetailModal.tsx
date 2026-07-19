@@ -9,7 +9,6 @@ import {
   Tag,
   Palette,
   Star,
-  Heart,
   Save,
   Loader2,
   Plus,
@@ -226,7 +225,6 @@ export default function AlbumDetailModal({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Heart size={14} className={isFavorite ? "text-rose-500 fill-rose-500" : "text-white/30"} />
                   <span className="text-xs text-white/50">Favorite</span>
                   <FavoriteToggle
                     isFavorite={isFavorite}
