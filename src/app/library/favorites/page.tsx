@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Star, Loader2 } from "lucide-react";
 import type { Album, Track } from "@/lib/types";
@@ -28,6 +28,28 @@ export default function FavoritesPage() {
       active = false;
     };
   }, []);
+
+  // Build a lookup: album spotify_id → tracks, so AlbumRow can show
+  // tracks when expanded. We need ALL tracks (not just favorites) to
+  // show the full album tracklist inside a favorite album.
+  const [allTracks, setAllTracks] = useState<Track[]>([]);
+  useEffect(() => {
+    fetch("/api/tracks")
+      .then((r) => r.json())
+      .then((d) => setAllTracks(Array.isArray(d) ? d : d.tracks ?? []))
+      .catch(() => {});
+  }, []);
+
+  const tracksByAlbum = useMemo(() => {
+    const map = new Map<string, Track[]>();
+    allTracks.forEach((t) => {
+      if (!t.album_spotify_id) return;
+      const arr = map.get(t.album_spotify_id) ?? [];
+      arr.push(t);
+      map.set(t.album_spotify_id, arr);
+    });
+    return map;
+  }, [allTracks]);
 
   const rateTrack = useCallback(async (trackId: string, stars: number | null) => {
     await fetch(`/api/tracks/${trackId}`, {
@@ -145,7 +167,11 @@ export default function FavoritesPage() {
                   >
                     <AlbumRow
                       album={album}
-                      tracks={album.tracks ?? []}
+                      tracks={
+                        album.spotify_id
+                          ? tracksByAlbum.get(album.spotify_id) ?? []
+                          : album.tracks ?? []
+                      }
                       onRate={(s) => rateAlbum(album.id, s)}
                       onToggleFavorite={(v) => toggleAlbumFavorite(album.id, v)}
                       onRateTrack={(tid, s) => rateTrack(tid, s)}
