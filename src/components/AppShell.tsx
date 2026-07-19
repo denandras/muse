@@ -72,13 +72,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <ReconnectBanner show={showReconnect} countdown={sessionExpired ? 4 : undefined} />
       {/* Sidebar nav (desktop) */}
       <aside className="hidden md:flex flex-col w-56 flex-shrink-0 border-r border-white/[0.06] bg-white/[0.02] p-4 gap-1">
-        <Link
-          href="/library"
-          className="flex items-center gap-2 px-3 py-2 mb-4 text-sm font-semibold text-white/90"
-        >
-          <Music2 size={18} className="text-white/70" />
-          Muse
-        </Link>
         {NAV_ITEMS.map((item) => (
           <NavLink key={item.href} {...item} active={pathname === item.href} />
         ))}
@@ -114,14 +107,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile top bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-30 glass-strong border-b border-white/[0.08] px-4 py-3 flex items-center justify-between">
-        <Link
-          href="/library"
-          className="flex items-center gap-2 text-sm font-semibold text-white/90"
-        >
-          <Music2 size={16} className="text-white/70" />
-          Muse
-        </Link>
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 glass-strong border-b border-white/[0.08] px-4 py-3 flex items-center justify-end">
         {user && (
           <Link href="/settings" className="flex items-center gap-2">
             {user.avatar_url ? (

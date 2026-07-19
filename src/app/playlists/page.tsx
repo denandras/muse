@@ -10,6 +10,7 @@ import {
   X,
   Check,
   Music,
+  AlertCircle,
 } from "lucide-react";
 import type { Genre, Mood } from "@/lib/types";
 
@@ -40,22 +41,87 @@ export default function PlaylistsPage() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      fetch("/api/spotify/playlists").then((r) => r.json()),
-      fetch("/api/genres").then((r) => r.json()),
-      fetch("/api/moods").then((r) => r.json()),
-    ])
-      .then(([p, g, m]) => {
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [playlistsRes, genresRes, moodsRes] = await Promise.allSettled([
+          fetch("/api/spotify/playlists"),
+          fetch("/api/genres"),
+          fetch("/api/moods"),
+        ]);
+
         if (!active) return;
-        setPlaylists(Array.isArray(p) ? p : p?.playlists ?? []);
-        setGenres(Array.isArray(g) ? g : g?.genres ?? []);
-        setMoods(Array.isArray(m) ? m : m?.moods ?? []);
-        if (p?.error && !p?.playlists) {
-          setError(String(p.error));
+
+        // Genres + moods are non-fatal if they fail.
+        if (genresRes.status === "fulfilled") {
+          try {
+            const g = await genresRes.value.json();
+            setGenres(Array.isArray(g) ? g : g?.genres ?? []);
+          } catch {
+            /* ignore parse error */
+          }
         }
-      })
-      .catch(() => {})
-      .finally(() => active && setLoading(false));
+        if (moodsRes.status === "fulfilled") {
+          try {
+            const m = await moodsRes.value.json();
+            setMoods(Array.isArray(m) ? m : m?.moods ?? []);
+          } catch {
+            /* ignore parse error */
+          }
+        }
+
+        if (playlistsRes.status === "rejected") {
+          setError("Failed to reach the Spotify playlists API.");
+          return;
+        }
+
+        const playlistsResponse = playlistsRes.value;
+        let payload: unknown = null;
+        try {
+          payload = await playlistsResponse.json();
+        } catch {
+          setError("Spotify playlists API returned an invalid response.");
+          return;
+        }
+        if (!active) return;
+
+        const obj = (payload ?? {}) as Record<string, unknown>;
+
+        // Spotify API 401 — user hasn't granted playlist-read-private.
+        // Show a friendly error state instead of crashing.
+        if (playlistsResponse.status === 401) {
+          setError(
+            (obj.error as string | undefined) ??
+              "Spotify returned 401 (unauthorized)."
+          );
+          return;
+        }
+
+        if (!playlistsResponse.ok) {
+          setError(
+            (obj.error as string | undefined) ??
+              `Spotify API error ${playlistsResponse.status}`
+          );
+          return;
+        }
+
+        const list = Array.isArray(payload)
+          ? (payload as SpotifyPlaylist[])
+          : (obj.playlists as SpotifyPlaylist[] | undefined) ?? [];
+        setPlaylists(list);
+        if (obj.error && !obj.playlists) {
+          setError(String(obj.error));
+        }
+      } catch (e) {
+        if (active) setError(String(e));
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void load();
     return () => {
       active = false;
     };
@@ -128,12 +194,17 @@ export default function PlaylistsPage() {
       </p>
 
       {loading ? (
-        <div className="flex items-center justify-center p-12">
-          <Loader2 className="animate-spin text-white/40" size={24} />
-        </div>
+        <PlaylistsSkeleton />
       ) : error ? (
-        <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-4 py-3 text-sm text-amber-200">
-          {error}. You may need to sign out and reconnect Spotify to grant playlist access.
+        <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-4 py-4 text-sm text-amber-200 flex items-start gap-3">
+          <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+          <div>
+            <div className="font-medium mb-0.5">Couldn&apos;t load playlists</div>
+            <div className="text-amber-200/80">
+              {error}. You may need to sign out and reconnect Spotify to grant
+              playlist access (the <code>playlist-read-private</code> scope).
+            </div>
+          </div>
         </div>
       ) : playlists.length === 0 ? (
         <div className="text-center py-16 text-sm text-white/30 rounded-xl bg-white/[0.02] border border-white/[0.04]">
@@ -330,6 +401,26 @@ export default function PlaylistsPage() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function PlaylistsSkeleton() {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-xl bg-white/[0.02] border border-white/[0.04] px-3 py-3 flex items-center gap-3 animate-pulse"
+        >
+          <div className="w-3.5 h-3.5 rounded bg-white/[0.06]" />
+          <div className="w-12 h-12 rounded-lg bg-white/[0.06]" />
+          <div className="flex-1 flex flex-col gap-1.5">
+            <div className="h-3 w-1/3 rounded bg-white/[0.06]" />
+            <div className="h-2.5 w-1/4 rounded bg-white/[0.04]" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

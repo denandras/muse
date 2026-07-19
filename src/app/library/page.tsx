@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Album, Genre, Mood, Track, ViewMode } from "@/lib/types";
 import FilterBar, { type FilterState } from "@/components/FilterBar";
 import ViewModeSwitch from "@/components/ViewModeSwitch";
@@ -12,6 +12,62 @@ import SyncButton from "@/components/SyncButton";
 import TrackDetailModal from "@/components/TrackDetailModal";
 import AlbumDetailModal from "@/components/AlbumDetailModal";
 
+// --- sessionStorage cache for library data -------------------------------
+// Caching avoids refetching ~1700 tracks every time the user navigates
+// away and back. Data is shown instantly from cache; a background revalidate
+// runs only when the cache is older than STALE_MS.
+const CACHE_VERSION = 3;
+const CACHE_KEY = `muse:library:v${CACHE_VERSION}`;
+const STALE_MS = 10 * 60 * 1000; // 10 minutes
+
+interface LibraryCache {
+  ts: number;
+  tracks: Track[];
+  albums: Album[];
+  genres: Genre[];
+  moods: Mood[];
+}
+
+function readCache(): LibraryCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LibraryCache;
+    if (
+      !parsed ||
+      !Array.isArray(parsed.tracks) ||
+      !Array.isArray(parsed.albums)
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(cache: LibraryCache) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // sessionStorage may be full (large libraries); silently ignore.
+  }
+}
+
+function clearCache() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+// --- Pagination ----------------------------------------------------------
+const PAGE_SIZE = 50;
+
 export default function LibraryPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -19,6 +75,7 @@ export default function LibraryPage() {
   const [moods, setMoods] = useState<Mood[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   const [view, setView] = useState<ViewMode>("both");
   const [filters, setFilters] = useState<FilterState>({
@@ -32,46 +89,100 @@ export default function LibraryPage() {
     sortDirection: "desc",
   });
 
+  // Pagination state — separate page per section so each list paginates
+  // independently. Data is fully in memory (cached), so "preloading
+  // adjacent pages" is effectively free: slicing is O(1) and the rows for
+  // the next/prev page render instantly on navigation.
+  const [trackPage, setTrackPage] = useState(0);
+  const [albumPage, setAlbumPage] = useState(0);
+
   // Track detail modal state
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
   // Album detail modal state
   const [editingAlbum, setEditingAlbum] = useState<Album | null>(null);
 
-  // Load library data.
-  const loadLibrary = useCallback(() => {
-    let active = true;
-    setLoading(true);
-    Promise.all([
-      fetch("/api/tracks").then((r) => r.json()),
-      fetch("/api/albums").then((r) => r.json()),
-      fetch("/api/genres").then((r) => r.json()),
-      fetch("/api/moods").then((r) => r.json()),
-    ])
-      .then(([t, a, g, m]) => {
-        if (!active) return;
-        setTracks(Array.isArray(t) ? t : t.tracks ?? []);
-        setAlbums(Array.isArray(a) ? a : a.albums ?? []);
-        setGenres(Array.isArray(g) ? g : g.genres ?? []);
-        setMoods(Array.isArray(m) ? m : m.moods ?? []);
-        setError(null);
-      })
-      .catch((e) => active && setError(String(e)))
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
+  // Fetch all library data from the API and write to cache + state.
+  const fetchLibrary = useCallback(async (): Promise<boolean> => {
+    try {
+      const [tRes, aRes, gRes, mRes] = await Promise.all([
+        fetch("/api/tracks"),
+        fetch("/api/albums"),
+        fetch("/api/genres"),
+        fetch("/api/moods"),
+      ]);
+      const [t, a, g, m] = await Promise.all([
+        tRes.json(),
+        aRes.json(),
+        gRes.json(),
+        mRes.json(),
+      ]);
+      const nextTracks = Array.isArray(t) ? t : t.tracks ?? [];
+      const nextAlbums = Array.isArray(a) ? a : a.albums ?? [];
+      const nextGenres = Array.isArray(g) ? g : g.genres ?? [];
+      const nextMoods = Array.isArray(m) ? m : m.moods ?? [];
+      setTracks(nextTracks);
+      setAlbums(nextAlbums);
+      setGenres(nextGenres);
+      setMoods(nextMoods);
+      setError(null);
+      writeCache({
+        ts: Date.now(),
+        tracks: nextTracks,
+        albums: nextAlbums,
+        genres: nextGenres,
+        moods: nextMoods,
+      });
+      return true;
+    } catch (e) {
+      setError(String(e));
+      return false;
+    }
   }, []);
 
+  // On mount: hydrate from cache instantly; refetch in the background only
+  // if the cache is missing or stale (stale-while-revalidate).
   useEffect(() => {
-    const cleanup = loadLibrary();
-    return cleanup;
-  }, [loadLibrary]);
+    const cache = readCache();
+    if (cache) {
+      setTracks(cache.tracks);
+      setAlbums(cache.albums);
+      setGenres(cache.genres);
+      setMoods(cache.moods);
+      setLoading(false);
+      setHydrated(true);
+      if (Date.now() - cache.ts > STALE_MS) {
+        // Background revalidate — don't toggle loading, keep cached UI.
+        void fetchLibrary();
+      }
+    } else {
+      setHydrated(true);
+      setLoading(true);
+      void fetchLibrary().then((ok) => {
+        if (ok) setLoading(false);
+      });
+    }
+  }, [fetchLibrary]);
+
+  // Public reload used by the Sync button — forces a fresh fetch.
+  const loadLibrary = useCallback(() => {
+    setLoading(true);
+    void fetchLibrary().then((ok) => {
+      if (ok) setLoading(false);
+    });
+  }, [fetchLibrary]);
 
   const updateFilters = useCallback(
     (next: Partial<FilterState>) =>
       setFilters((prev) => ({ ...prev, ...next })),
     []
   );
+
+  // Reset pagination to first page whenever filters or view change so the
+  // user always lands on a non-empty page.
+  useEffect(() => {
+    setTrackPage(0);
+    setAlbumPage(0);
+  }, [filters, view]);
 
   // Collect descendant genre ids when "include subgenres" is on.
   const expandedGenreIds = useMemo(() => {
@@ -161,6 +272,29 @@ export default function LibraryPage() {
       .sort((a, b) => sortTracks(a, b, filters.sort, filters.sortDirection));
   }, [tracks, filters, expandedGenreIds, showAlbums, filteredAlbums]);
 
+  // Paginate the filtered results. Only the current page slice is rendered,
+  // which keeps filter toggles instant even with 1700+ items.
+  const trackPageCount = Math.max(1, Math.ceil(filteredTracks.length / PAGE_SIZE));
+  const albumPageCount = Math.max(1, Math.ceil(filteredAlbums.length / PAGE_SIZE));
+  const safeTrackPage = Math.min(trackPage, trackPageCount - 1);
+  const safeAlbumPage = Math.min(albumPage, albumPageCount - 1);
+  const pagedTracks = useMemo(
+    () =>
+      filteredTracks.slice(
+        safeTrackPage * PAGE_SIZE,
+        safeTrackPage * PAGE_SIZE + PAGE_SIZE
+      ),
+    [filteredTracks, safeTrackPage]
+  );
+  const pagedAlbums = useMemo(
+    () =>
+      filteredAlbums.slice(
+        safeAlbumPage * PAGE_SIZE,
+        safeAlbumPage * PAGE_SIZE + PAGE_SIZE
+      ),
+    [filteredAlbums, safeAlbumPage]
+  );
+
   // Tracks grouped by album spotify id (for album expansion).
   const tracksByAlbum = useMemo(() => {
     const map = new Map<string, Track[]>();
@@ -183,28 +317,40 @@ export default function LibraryPage() {
     setTracks((prev) =>
       prev.map((t) => (t.id === trackId ? { ...t, stars } : t))
     );
-  }, []);
+    // Keep cache in sync with optimistic local state.
+    writeCache({
+      ts: Date.now(),
+      tracks: tracks.map((t) => (t.id === trackId ? { ...t, stars } : t)),
+      albums,
+      genres,
+      moods,
+    });
+  }, [tracks, albums, genres, moods]);
 
   const toggleTrackFavorite = useCallback(
     async (trackId: string, value: boolean) => {
       // Optimistic update — flip the heart immediately
-      setTracks((prev) =>
-        prev.map((t) => (t.id === trackId ? { ...t, is_favorite: value } : t))
+      const nextTracks = tracks.map((t) =>
+        t.id === trackId ? { ...t, is_favorite: value } : t
       );
+      setTracks(nextTracks);
       try {
         await fetch(`/api/tracks/${trackId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ is_favorite: value }),
         });
+        writeCache({ ts: Date.now(), tracks: nextTracks, albums, genres, moods });
       } catch {
         // Revert on failure
-        setTracks((prev) =>
-          prev.map((t) => (t.id === trackId ? { ...t, is_favorite: !value } : t))
+        const reverted = tracks.map((t) =>
+          t.id === trackId ? { ...t, is_favorite: !value } : t
         );
+        setTracks(reverted);
+        writeCache({ ts: Date.now(), tracks: reverted, albums, genres, moods });
       }
     },
-    []
+    [tracks, albums, genres, moods]
   );
 
   const rateAlbum = useCallback(async (albumId: string, stars: number | null) => {
@@ -221,23 +367,27 @@ export default function LibraryPage() {
   const toggleAlbumFavorite = useCallback(
     async (albumId: string, value: boolean) => {
       // Optimistic update
-      setAlbums((prev) =>
-        prev.map((a) => (a.id === albumId ? { ...a, is_favorite: value } : a))
+      const nextAlbums = albums.map((a) =>
+        a.id === albumId ? { ...a, is_favorite: value } : a
       );
+      setAlbums(nextAlbums);
       try {
         await fetch(`/api/albums/${albumId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ is_favorite: value }),
         });
+        writeCache({ ts: Date.now(), tracks, albums: nextAlbums, genres, moods });
       } catch {
         // Revert on failure
-        setAlbums((prev) =>
-          prev.map((a) => (a.id === albumId ? { ...a, is_favorite: !value } : a))
+        const reverted = albums.map((a) =>
+          a.id === albumId ? { ...a, is_favorite: !value } : a
         );
+        setAlbums(reverted);
+        writeCache({ ts: Date.now(), tracks, albums: reverted, genres, moods });
       }
     },
-    []
+    [tracks, albums, genres, moods]
   );
 
   // Track detail modal save — PATCH track metadata, then sync tags.
@@ -293,11 +443,13 @@ export default function LibraryPage() {
       // Refetch the single track to get fresh genres/moods in joined shape.
       const res = await fetch(`/api/tracks/${trackId}`).then((r) => r.json());
       const fresh = res.track as Track | undefined;
-      setTracks((prev) =>
-        prev.map((t) => (t.id === trackId ? (fresh ?? t) : t))
-      );
+      setTracks((prev) => {
+        const next = prev.map((t) => (t.id === trackId ? (fresh ?? t) : t));
+        writeCache({ ts: Date.now(), tracks: next, albums, genres, moods });
+        return next;
+      });
     },
-    []
+    [albums, genres, moods]
   );
 
   // Album detail modal save — PATCH album metadata, then sync tags.
@@ -345,14 +497,21 @@ export default function LibraryPage() {
 
       const res = await fetch(`/api/albums/${albumId}`).then((r) => r.json());
       const fresh = res.album as Album | undefined;
-      setAlbums((prev) =>
-        prev.map((a) => (a.id === albumId ? (fresh ?? a) : a))
-      );
+      setAlbums((prev) => {
+        const next = prev.map((a) => (a.id === albumId ? (fresh ?? a) : a));
+        writeCache({ ts: Date.now(), tracks, albums: next, genres, moods });
+        return next;
+      });
     },
-    []
+    [tracks, genres, moods]
   );
 
-  if (loading) {
+  // Hard refresh + cache bust (used by SyncButton via loadLibrary already,
+  // but expose a clearCache helper for completeness).
+  void clearCache;
+
+  // Show a spinner only on the very first load when we have no cached data.
+  if (loading && !hydrated) {
     return (
       <div className="flex items-center justify-center p-12">
         <Loader2 className="animate-spin text-white/40" size={24} />
@@ -360,7 +519,7 @@ export default function LibraryPage() {
     );
   }
 
-  if (error) {
+  if (error && tracks.length === 0 && albums.length === 0) {
     return (
       <div className="p-6">
         <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 px-4 py-3 text-sm text-rose-300">
@@ -402,10 +561,10 @@ export default function LibraryPage() {
             }}
             className="flex flex-col gap-1.5"
           >
-            {filteredAlbums.length === 0 ? (
+            {pagedAlbums.length === 0 ? (
               <EmptyState label="No albums match your filters." />
             ) : (
-              filteredAlbums.map((album) => (
+              pagedAlbums.map((album) => (
                 <motion.div
                   key={album.id}
                   variants={{
@@ -436,6 +595,16 @@ export default function LibraryPage() {
               ))
             )}
           </motion.div>
+
+          {albumPageCount > 1 && (
+            <Pagination
+              page={safeAlbumPage}
+              pageCount={albumPageCount}
+              total={filteredAlbums.length}
+              pageSize={PAGE_SIZE}
+              onChange={setAlbumPage}
+            />
+          )}
         </section>
       )}
 
@@ -451,10 +620,10 @@ export default function LibraryPage() {
             }}
             className="flex flex-col gap-1.5"
           >
-            {filteredTracks.length === 0 ? (
+            {pagedTracks.length === 0 ? (
               <EmptyState label="No tracks match your filters." />
             ) : (
-              filteredTracks.map((track) => (
+              pagedTracks.map((track) => (
                 <motion.div
                   key={track.id}
                   variants={{
@@ -480,6 +649,16 @@ export default function LibraryPage() {
               ))
             )}
           </motion.div>
+
+          {trackPageCount > 1 && (
+            <Pagination
+              page={safeTrackPage}
+              pageCount={trackPageCount}
+              total={filteredTracks.length}
+              pageSize={PAGE_SIZE}
+              onChange={setTrackPage}
+            />
+          )}
         </section>
       )}
 
@@ -505,6 +684,51 @@ export default function LibraryPage() {
         onClose={() => setEditingAlbum(null)}
         onSave={handleAlbumSave}
       />
+    </div>
+  );
+}
+
+function Pagination({
+  page,
+  pageCount,
+  total,
+  pageSize,
+  onChange,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  pageSize: number;
+  onChange: (p: number) => void;
+}) {
+  const from = page * pageSize + 1;
+  const to = Math.min(total, (page + 1) * pageSize);
+  return (
+    <div className="flex items-center justify-between gap-3 py-2 text-xs text-white/50">
+      <span>
+        {from}–{to} of {total}
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onChange(Math.max(0, page - 1))}
+          disabled={page === 0}
+          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label="Previous page"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <span className="tabular-nums">
+          {page + 1} / {pageCount}
+        </span>
+        <button
+          onClick={() => onChange(Math.min(pageCount - 1, page + 1))}
+          disabled={page >= pageCount - 1}
+          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label="Next page"
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
     </div>
   );
 }
