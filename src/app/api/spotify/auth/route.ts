@@ -9,6 +9,7 @@ const SCOPES = [
   "user-library-modify",
   "user-read-private",
   "user-read-email",
+  "playlist-read-private",
 ].join(" ");
 
 export async function GET() {

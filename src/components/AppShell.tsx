@@ -6,12 +6,11 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Library,
-  Heart,
-  Star,
   FolderTree,
   Palette,
   Settings,
   Music2,
+  ListMusic,
 } from "lucide-react";
 import type { User } from "@/lib/types";
 import { usePlayback } from "@/lib/playback";
@@ -19,8 +18,7 @@ import ReconnectBanner from "@/components/ReconnectBanner";
 
 const NAV_ITEMS = [
   { href: "/library", label: "Library", icon: Library },
-  { href: "/library/liked", label: "Liked", icon: Heart },
-  { href: "/library/favorites", label: "Favorites", icon: Star },
+  { href: "/playlists", label: "Playlists", icon: ListMusic },
   { href: "/genres", label: "Genres", icon: FolderTree },
   { href: "/moods", label: "Moods", icon: Palette },
   { href: "/settings", label: "Settings", icon: Settings },

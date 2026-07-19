@@ -470,6 +470,7 @@ export default function LibraryPage() {
                 >
                   <TrackRow
                     track={track}
+                    showLikedBadge={false}
                     onRate={(s) => rateTrack(track.id, s)}
                     onToggleFavorite={(v) => toggleTrackFavorite(track.id, v)}
                     onOpenDetail={() => setEditingTrack(track)}
