@@ -91,36 +91,11 @@ export default function LibraryPage() {
     return ids;
   }, [filters.genreId, filters.includeSubgenres, genres]);
 
-  // Filter tracks.
-  const filteredTracks = useMemo(() => {
-    const q = filters.search.trim().toLowerCase();
-    return tracks
-      .filter((t) => {
-        if (filters.favoritesOnly && !t.is_favorite) return false;
-        if (q) {
-          const hay = `${t.title} ${t.artist} ${t.album_title ?? ""}`.toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
-        if (filters.genreId) {
-          const ok =
-            expandedGenreIds
-              ? (t.genres ?? []).some((g) => expandedGenreIds.has(g.id))
-              : (t.genres ?? []).some((g) => g.id === filters.genreId);
-          if (!ok) return false;
-        }
-        if (filters.moodId && !(t.moods ?? []).some((m) => m.id === filters.moodId))
-          return false;
-        if (filters.stars === "unrated") {
-          if (t.stars !== null) return false;
-        } else if (typeof filters.stars === "number") {
-          if (t.stars === null || t.stars < filters.stars) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => sortTracks(a, b, filters.sort, filters.sortDirection));
-  }, [tracks, filters, expandedGenreIds]);
+  const showAlbums = view === "albums" || view === "both";
+  const showTracks = view === "tracks" || view === "both";
 
-  // Filter albums.
+  // Filter albums (computed first so filteredTracks can exclude
+  // tracks that are already shown inside a displayed album row).
   const filteredAlbums = useMemo(() => {
     const q = filters.search.trim().toLowerCase();
     return albums
@@ -148,6 +123,43 @@ export default function LibraryPage() {
       })
       .sort((a, b) => sortAlbums(a, b, filters.sort, filters.sortDirection));
   }, [albums, filters, expandedGenreIds]);
+
+  // Filter tracks.
+  // When showing both albums and tracks, hide tracks that belong to a
+  // displayed album — they're already visible inside the album row.
+  const filteredTracks = useMemo(() => {
+    const q = filters.search.trim().toLowerCase();
+    const albumSpotifyIds = new Set(
+      showAlbums ? filteredAlbums.map((a) => a.spotify_id).filter(Boolean) : []
+    );
+    return tracks
+      .filter((t) => {
+        if (showAlbums && t.album_spotify_id && albumSpotifyIds.has(t.album_spotify_id)) {
+          return false;
+        }
+        if (filters.favoritesOnly && !t.is_favorite) return false;
+        if (q) {
+          const hay = `${t.title} ${t.artist} ${t.album_title ?? ""}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        if (filters.genreId) {
+          const ok =
+            expandedGenreIds
+              ? (t.genres ?? []).some((g) => expandedGenreIds.has(g.id))
+              : (t.genres ?? []).some((g) => g.id === filters.genreId);
+          if (!ok) return false;
+        }
+        if (filters.moodId && !(t.moods ?? []).some((m) => m.id === filters.moodId))
+          return false;
+        if (filters.stars === "unrated") {
+          if (t.stars !== null) return false;
+        } else if (typeof filters.stars === "number") {
+          if (t.stars === null || t.stars < filters.stars) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => sortTracks(a, b, filters.sort, filters.sortDirection));
+  }, [tracks, filters, expandedGenreIds, showAlbums, filteredAlbums]);
 
   // Tracks grouped by album spotify id (for album expansion).
   const tracksByAlbum = useMemo(() => {
@@ -357,9 +369,6 @@ export default function LibraryPage() {
       </div>
     );
   }
-
-  const showAlbums = view === "albums" || view === "both";
-  const showTracks = view === "tracks" || view === "both";
 
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-6 flex flex-col gap-4">

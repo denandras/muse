@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Search, ChevronDown, ArrowUp, ArrowDown, X, Heart } from "lucide-react";
 import type { Genre, Mood, SortKey, SortDirection } from "@/lib/types";
 
 export interface FilterState {
@@ -65,15 +65,25 @@ export default function FilterBar({
       <div className="relative">
         <Search
           size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
         />
         <input
           type="search"
           value={filters.search}
           onChange={(e) => onChange({ search: e.target.value })}
           placeholder="Search title, artist, album..."
-          className="w-full h-10 pl-9 pr-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
+          className="w-full h-10 pl-9 pr-9 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
         />
+        {filters.search && (
+          <button
+            type="button"
+            onClick={() => onChange({ search: "" })}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
+            aria-label="Clear search"
+          >
+            <X size={15} />
+          </button>
+        )}
       </div>
 
       {/* Filters row */}
@@ -159,18 +169,25 @@ export default function FilterBar({
           />
         </div>
 
-        {/* Favorites only */}
-        <label className="inline-flex items-center gap-1.5 text-xs text-white/50 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={filters.favoritesOnly}
-            onChange={(e) =>
-              onChange({ favoritesOnly: e.target.checked })
-            }
-            className="w-3.5 h-3.5 rounded accent-rose-500"
+        {/* Favorites only — heart icon toggle */}
+        <button
+          type="button"
+          onClick={() => onChange({ favoritesOnly: !filters.favoritesOnly })}
+          className={`flex items-center justify-center h-9 w-9 rounded-xl border transition-colors ${
+            filters.favoritesOnly
+              ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
+              : "bg-white/[0.04] border-white/[0.06] text-white/30 hover:text-white/60"
+          }`}
+          title={filters.favoritesOnly ? "Showing favorites only (click to show all)" : "Show favorites only"}
+          aria-pressed={filters.favoritesOnly}
+          aria-label="Toggle favorites only"
+        >
+          <Heart
+            size={15}
+            className={filters.favoritesOnly ? "fill-rose-400" : ""}
+            strokeWidth={1.5}
           />
-          Favorites only
-        </label>
+        </button>
 
         {/* Sort + direction toggle */}
         <div className="flex items-center gap-1 ml-auto">
