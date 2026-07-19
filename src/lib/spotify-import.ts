@@ -509,22 +509,73 @@ export async function importSavedAlbums(
     const items = data.items ?? [];
     if (items.length === 0) break;
 
-    const albumRows: AlbumRow[] = items.map((item) => {
-      const a = item.album;
-      return {
-        user_id: user.id,
-        spotify_id: a.id,
-        spotify_uri: a.uri,
-        title: a.name,
-        artist: a.artists.map((x) => x.name).join(", "),
-        cover_url: a.images?.[0]?.url ?? null,
-        release_date: a.release_date ?? null,
-        album_type: a.album_type ?? null,
-        added_at: item.added_at,
-      };
+    const albumRows: AlbumRow[] = items
+      .filter((item) => {
+        // Defer the single-track decision until after fetchAlbumTracks,
+        // because album_type 'single' can still have >1 track (e.g. a
+        // single + an instrumental version). We only skip the albums
+        // table insert when the album actually has exactly 1 track.
+        return true;
+      })
+      .map((item) => {
+        const a = item.album;
+        return {
+          user_id: user.id,
+          spotify_id: a.id,
+          spotify_uri: a.uri,
+          title: a.name,
+          artist: a.artists.map((x) => x.name).join(", "),
+          cover_url: a.images?.[0]?.url ?? null,
+          release_date: a.release_date ?? null,
+          album_type: a.album_type ?? null,
+          added_at: item.added_at,
+        };
+      });
+
+    // Fetch tracks for all albums on this page concurrently (bounded pool).
+    // We always fetch tracks for ALL albums on the page (not just new ones)
+    // so re-running sync picks up tracks added to an existing album.
+    const albumTrackResults = await fetchAlbumTracksConcurrent(
+      items.map((i) => i.album),
+      accessToken,
+      maxRetries,
+      5
+    );
+
+    // Partition albums: those with exactly 1 track are treated as tracks
+    // (skip the albums table insert entirely), the rest go into albums.
+    const multiTrackAlbumRows: AlbumRow[] = [];
+    const singleTrackRows: TrackRow[] = [];
+    items.forEach((item, idx) => {
+      const album = item.album;
+      const tracks = albumTrackResults[idx];
+      if (tracks.length === 1) {
+        // Single-track "album" → treat as a track, not an album.
+        const t = tracks[0];
+        singleTrackRows.push({
+          user_id: user.id,
+          spotify_id: t.id,
+          spotify_uri: t.uri,
+          title: t.name,
+          artist: t.artists.map((x) => x.name).join(", "),
+          album_title: album.name,
+          album_spotify_id: album.id,
+          album_cover_url: album.images?.[0]?.url ?? null,
+          duration_ms: t.duration_ms,
+          is_liked: false,
+          added_at: item.added_at,
+        });
+      } else if (tracks.length > 1) {
+        multiTrackAlbumRows.push(albumRows[idx]);
+      }
+      // tracks.length === 0 → skip entirely (empty album, rare)
     });
 
-    const { inserted, existingIds } = await upsertAlbums(supabase, albumRows);
+    // Upsert multi-track albums.
+    const { inserted, existingIds } = await upsertAlbums(
+      supabase,
+      multiTrackAlbumRows
+    );
     albumsImported += inserted;
 
     onProgress({
@@ -535,35 +586,13 @@ export async function importSavedAlbums(
       label: `Importing ${albumsImported.toLocaleString()} of ${albumsTotal.toLocaleString()} saved albums…`,
     });
 
-    // Extract tracks from each album that is new (or refresh existing).
-    // We fetch tracks for ALL albums in the page (not just new ones) so
-    // that re-running sync picks up tracks added to an existing album.
-    // For incremental stop we still use the album-level heuristic.
-    for (const item of items) {
-      const album = item.album;
-      const albumTracks = await fetchAlbumTracks(
-        album.id,
-        album.name,
-        album.images?.[0]?.url ?? null,
-        accessToken,
-        maxRetries
-      );
-      if (albumTracks.length === 0) continue;
-      const trackRows: TrackRow[] = albumTracks.map((t) => ({
-        user_id: user.id,
-        spotify_id: t.id,
-        spotify_uri: t.uri,
-        title: t.name,
-        artist: t.artists.map((x) => x.name).join(", "),
-        album_title: album.name,
-        album_spotify_id: album.id,
-        album_cover_url: album.images?.[0]?.url ?? null,
-        duration_ms: t.duration_ms,
-        is_liked: false,
-        added_at: item.added_at,
-      }));
-      const { inserted: ti } = await upsertTracks(supabase, trackRows);
-      albumTracksImported += ti;
+    // Upsert the single-track-as-track rows (they bypassed the albums table).
+    let sPageInserted = 0;
+    let mPageInserted = 0;
+    if (singleTrackRows.length > 0) {
+      const { inserted: sInserted } = await upsertTracks(supabase, singleTrackRows);
+      sPageInserted = sInserted;
+      albumTracksImported += sInserted;
       onProgress({
         phase: "album-tracks",
         page,
@@ -573,7 +602,54 @@ export async function importSavedAlbums(
       });
     }
 
-    const allExisting = existingIds.size === albumRows.length;
+    // For multi-track albums, extract their tracks into the tracks table.
+    // We already have the track data from fetchAlbumTracksConcurrent, so
+    // we just re-map it without re-fetching.
+    // Batch upsert all multi-track-album tracks in one go for efficiency.
+    const multiTrackRows: TrackRow[] = [];
+    items.forEach((item, idx) => {
+      const album = item.album;
+      const tracks = albumTrackResults[idx];
+      if (tracks.length <= 1) return;
+      for (const t of tracks) {
+        multiTrackRows.push({
+          user_id: user.id,
+          spotify_id: t.id,
+          spotify_uri: t.uri,
+          title: t.name,
+          artist: t.artists.map((x) => x.name).join(", "),
+          album_title: album.name,
+          album_spotify_id: album.id,
+          album_cover_url: album.images?.[0]?.url ?? null,
+          duration_ms: t.duration_ms,
+          is_liked: false,
+          added_at: item.added_at,
+        });
+      }
+    });
+    if (multiTrackRows.length > 0) {
+      const { inserted: mti } = await upsertTracks(supabase, multiTrackRows);
+      mPageInserted = mti;
+      albumTracksImported += mti;
+      onProgress({
+        phase: "album-tracks",
+        page,
+        total: albumsTotal,
+        processed: albumTracksImported,
+        label: `Extracted ${albumTracksImported.toLocaleString()} tracks from saved albums…`,
+      });
+    }
+
+    // Incremental stop heuristic: a page is "all existing" if we didn't
+    // insert any new albums OR tracks this page. We track this via the
+    // insert counts returned by upsertAlbums/upsertTracks above. This
+    // works regardless of whether albums went into the albums table or
+    // were treated as single tracks.
+    const pageInsertedNew =
+      (existingIds.size < multiTrackAlbumRows.length) || // new multi-track album
+      (sPageInserted > 0) ||                              // new single-as-track
+      (mPageInserted > 0);                                 // new track in existing album
+    const allExisting = !pageInsertedNew;
     if (allExisting) {
       consecutiveAllExistingPages++;
       if (consecutiveAllExistingPages >= STOP_AFTER_EXISTING_PAGES) {
@@ -631,6 +707,72 @@ async function fetchAlbumTracks(
     offset += limit;
   }
   return all;
+}
+
+/**
+ * Fetches tracks for multiple albums concurrently with a bounded pool.
+ * Returns results in the same order as the input albums array.
+ *
+ * @param concurrency max simultaneous in-flight requests (default 5).
+ * Spotify's rate limit is rolling; 5 concurrent is a safe balance between
+ * speed and 429 backpressure. Each request still goes through spotifyFetch
+ * which handles 429 retries with Retry-After.
+ */
+async function fetchAlbumTracksConcurrent(
+  albums: Array<{
+    id: string;
+    name: string;
+    images?: Array<{ url: string }>;
+  }>,
+  accessToken: string,
+  maxRetries: number,
+  concurrency = 5
+): Promise<Array<Array<{
+  id: string;
+  uri: string;
+  name: string;
+  duration_ms: number;
+  artists: Array<{ name: string }>;
+}>>> {
+  const results: Array<Array<{
+    id: string;
+    uri: string;
+    name: string;
+    duration_ms: number;
+    artists: Array<{ name: string }>;
+  }>> = new Array(albums.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const idx = next++;
+      if (idx >= albums.length) return;
+      const album = albums[idx];
+      try {
+        const tracks = await fetchAlbumTracks(
+          album.id,
+          album.name,
+          album.images?.[0]?.url ?? null,
+          accessToken,
+          maxRetries
+        );
+        results[idx] = tracks;
+      } catch (err) {
+        // Don't let one album failure kill the whole page — log and continue.
+        console.error(
+          `[spotify-import] fetchAlbumTracks for ${album.id} failed:`,
+          err instanceof Error ? err.message : err
+        );
+        results[idx] = [];
+      }
+    }
+  };
+  const workers: Promise<void>[] = [];
+  for (let i = 0; i < Math.min(concurrency, albums.length); i++) {
+    workers.push(worker());
+  }
+  await Promise.all(workers);
+  return results;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

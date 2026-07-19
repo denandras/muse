@@ -66,21 +66,33 @@ export default function SyncButton({
     const controller = new AbortController();
     abortRef.current = controller;
 
-    try {
-      const res = await fetch("/api/sync/import", {
+    /**
+     * Runs one phase of the sync (either liked or albums) by posting to
+     * /api/sync/import with the appropriate query param, streaming NDJSON
+     * progress, and returning the ImportResult for that phase.
+     *
+     * We split the two phases into separate HTTP requests so each gets
+     * its own Vercel function timeout budget (60s on Hobby). The server
+     * route already supports ?likedOnly and ?albumsOnly.
+     */
+    const runPhase = async (
+      phase: "liked" | "albums",
+      query: string
+    ): Promise<ImportResult | null> => {
+      const res = await fetch(`/api/sync/import?${query}`, {
         method: "POST",
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
         const text = await res.text().catch(() => "");
-        setError(`Sync failed (${res.status}): ${text.slice(0, 120)}`);
-        return;
+        setError(`Sync (${phase}) failed (${res.status}): ${text.slice(0, 120)}`);
+        return null;
       }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let finalResult: ImportResult | null = null;
+      let phaseResult: ImportResult | null = null;
 
       // eslint-disable-next-line no-constant-condition
       while (true) {
@@ -100,20 +112,37 @@ export default function SyncButton({
           if (obj.error) {
             setError(String(obj.error));
           } else if (obj.result) {
-            finalResult = obj.result as ImportResult;
+            phaseResult = obj.result as ImportResult;
           } else if (obj.label) {
             setProgressLabel(String(obj.label));
-            // Track numeric progress for the bar
             const processed = typeof obj.processed === "number" ? obj.processed : 0;
             const total = typeof obj.total === "number" ? obj.total : 0;
-            const phase = (obj.phase as ProgressState["phase"]) ?? "liked";
-            setProgress({ phase, processed, total, label: String(obj.label) });
+            const p = (obj.phase as ProgressState["phase"]) ?? phase;
+            setProgress({ phase: p, processed, total, label: String(obj.label) });
           }
         }
       }
+      return phaseResult;
+    };
 
-      if (finalResult) {
-        setResult(finalResult);
+    try {
+      // Phase 1: liked songs (its own 60s budget)
+      const likedResult = await runPhase("liked", "likedOnly=true");
+      // Phase 2: saved albums + album tracks (its own 60s budget)
+      const albumsResult = await runPhase("albums", "albumsOnly=true");
+
+      // Merge the two phase results into one ImportResult for the toast.
+      if (likedResult || albumsResult) {
+        const merged: ImportResult = {
+          likedTracksImported: likedResult?.likedTracksImported ?? 0,
+          albumsImported: albumsResult?.albumsImported ?? 0,
+          albumTracksImported: albumsResult?.albumTracksImported ?? 0,
+          likedIncrementalStop: likedResult?.likedIncrementalStop ?? false,
+          albumsIncrementalStop: albumsResult?.albumsIncrementalStop ?? false,
+          likedTracksTotal: likedResult?.likedTracksTotal ?? 0,
+          albumsTotal: albumsResult?.albumsTotal ?? 0,
+        };
+        setResult(merged);
         setProgressLabel(null);
         setProgress(null);
         onSyncComplete?.();
