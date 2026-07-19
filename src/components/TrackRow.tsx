@@ -22,7 +22,7 @@ import MoodBadge from "./MoodBadge";
 
 interface TrackRowProps {
   track: Track;
-  onRate?: (stars: number) => void;
+  onRate?: (stars: number | null) => void;
   onToggleFavorite?: (value: boolean) => void;
   onRemoveFromLiked?: () => void;
   onOpenDetail?: () => void;

@@ -113,6 +113,10 @@ export default function SyncButton({
             setError(String(obj.error));
           } else if (obj.result) {
             phaseResult = obj.result as ImportResult;
+          } else if (obj.phase === "done") {
+            // Server signals phase finished — don't show "Sync complete"
+            // here because another phase may follow. Just let the stream
+            // close naturally.
           } else if (obj.label) {
             setProgressLabel(String(obj.label));
             const processed = typeof obj.processed === "number" ? obj.processed : 0;

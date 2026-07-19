@@ -29,7 +29,7 @@ export default function FavoritesPage() {
     };
   }, []);
 
-  const rateTrack = useCallback(async (trackId: string, stars: number) => {
+  const rateTrack = useCallback(async (trackId: string, stars: number | null) => {
     await fetch(`/api/tracks/${trackId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -52,7 +52,7 @@ export default function FavoritesPage() {
     []
   );
 
-  const rateAlbum = useCallback(async (albumId: string, stars: number) => {
+  const rateAlbum = useCallback(async (albumId: string, stars: number | null) => {
     await fetch(`/api/albums/${albumId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

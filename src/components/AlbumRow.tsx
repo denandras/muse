@@ -20,9 +20,9 @@ import TrackRow from "./TrackRow";
 interface AlbumRowProps {
   album: Album;
   tracks?: Track[];
-  onRate?: (stars: number) => void;
+  onRate?: (stars: number | null) => void;
+  onRateTrack?: (trackId: string, stars: number | null) => void;
   onToggleFavorite?: (value: boolean) => void;
-  onRateTrack?: (trackId: string, stars: number) => void;
   onToggleTrackFavorite?: (trackId: string, value: boolean) => void;
   onOpenTrackDetail?: (trackId: string) => void;
   onOpenAlbumDetail?: () => void;

@@ -256,7 +256,7 @@ export default function LikedPage() {
     </div>
   );
 
-  async function rateTrack(trackId: string, stars: number) {
+  async function rateTrack(trackId: string, stars: number | null) {
     await fetch(`/api/tracks/${trackId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

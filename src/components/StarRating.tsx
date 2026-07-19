@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 
 interface StarRatingProps {
   value: number | null;
-  onChange?: (stars: number) => void;
+  onChange?: (stars: number | null) => void;
   size?: number;
   readOnly?: boolean;
 }
@@ -29,8 +29,8 @@ export default function StarRating({
             onClick={(e) => {
               e.stopPropagation();
               if (readOnly) return;
-              // Click same value again clears it.
-              onChange?.(value === n ? n : n);
+              // Click same value again clears it (sets to 0/null).
+              onChange?.(value === n ? 0 : n);
             }}
             className={`${
               readOnly ? "cursor-default" : "cursor-pointer"
