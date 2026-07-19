@@ -378,7 +378,7 @@ export async function importLikedTracks(
   const pageSize = opts.pageSize ?? 50;
   const maxRetries = opts.maxRetries ?? 5;
 
-  let after: string | null = null;
+  let offset = 0;
   let page = 0;
   let imported = 0;
   let total = 0;
@@ -394,12 +394,10 @@ export async function importLikedTracks(
   // eslint-disable-next-line no-constant-condition
   while (true) {
     page++;
-    const url = new URL("https://api.spotify.com/v1/me/tracks");
-    url.searchParams.set("limit", String(pageSize));
-    if (after) url.searchParams.set("after", after);
+    const url = `https://api.spotify.com/v1/me/tracks?limit=${pageSize}&offset=${offset}`;
 
     const data = await spotifyFetch<SpotifyLikedTracksPage>(
-      url.toString(),
+      url,
       accessToken,
       maxRetries
     );
@@ -451,9 +449,8 @@ export async function importLikedTracks(
       consecutiveAllExistingPages = 0;
     }
 
-    // Advance cursor
-    after = data.cursors?.after ?? data.after;
-    if (!after || !data.next) break;
+    if (!data.next) break;
+    offset += pageSize;
   }
 
   await saveSyncState(supabase, user.id, {
@@ -535,14 +532,57 @@ export async function importSavedAlbums(
         };
       });
 
-    // Fetch tracks for all albums on this page concurrently (bounded pool).
-    // We always fetch tracks for ALL albums on the page (not just new ones)
-    // so re-running sync picks up tracks added to an existing album.
-    const albumTrackResults = await fetchAlbumTracksConcurrent(
-      items.map((i) => i.album),
+    // Check which albums on this page are already in the DB so we can
+    // skip the expensive /albums/{id}/tracks fetch for existing ones.
+    // This is the critical optimization: fetching tracks for 50 albums
+    // at 5 concurrent takes 10-15s per page, which blows the Vercel 60s
+    // Hobby timeout. By only fetching new albums, re-syncs are fast.
+    const pageAlbumIds = items.map((i) => i.album.id);
+    const existingAlbumIds = new Set<string>();
+    for (let i = 0; i < pageAlbumIds.length; i += UPSERT_BATCH) {
+      const chunk = pageAlbumIds.slice(i, i + UPSERT_BATCH);
+      const { data: existing } = await supabase
+        .from("albums")
+        .select("spotify_id")
+        .eq("user_id", user.id)
+        .in("spotify_id", chunk);
+      for (const row of existing ?? []) existingAlbumIds.add(row.spotify_id);
+    }
+    // Also check tracks table for single-track "albums" that were stored as tracks
+    const existingTrackAlbumIds = new Set<string>();
+    for (let i = 0; i < pageAlbumIds.length; i += UPSERT_BATCH) {
+      const chunk = pageAlbumIds.slice(i, i + UPSERT_BATCH);
+      const { data: existing } = await supabase
+        .from("tracks")
+        .select("album_spotify_id")
+        .eq("user_id", user.id)
+        .in("album_spotify_id", chunk);
+      for (const row of existing ?? []) {
+        if (row.album_spotify_id) existingTrackAlbumIds.add(row.album_spotify_id);
+      }
+    }
+
+    const newAlbums = items.filter(
+      (i) => !existingAlbumIds.has(i.album.id) && !existingTrackAlbumIds.has(i.album.id)
+    );
+
+    // Fetch tracks only for NEW albums (skip existing ones to save time).
+    const newAlbumTrackResults = await fetchAlbumTracksConcurrent(
+      newAlbums.map((i) => i.album),
       accessToken,
       maxRetries,
       5
+    );
+
+    // Build a lookup: album.id → tracks[] (only for new albums)
+    const albumTracksMap = new Map<string, typeof newAlbumTrackResults[number]>();
+    newAlbums.forEach((item, idx) => {
+      albumTracksMap.set(item.album.id, newAlbumTrackResults[idx]);
+    });
+
+    // For existing albums, use empty array — we already have their tracks.
+    const albumTrackResults = items.map(
+      (item) => albumTracksMap.get(item.album.id) ?? []
     );
 
     // Partition albums: those with exactly 1 track are treated as tracks
