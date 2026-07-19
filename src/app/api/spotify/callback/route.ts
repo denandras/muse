@@ -51,8 +51,10 @@ export async function GET(request: NextRequest) {
   });
 
   if (!meRes.ok) {
-    console.error("[spotify/callback] /v1/me failed:", meRes.status);
-    return NextResponse.redirect(new URL("/?spotify_error=profile_fetch", request.url));
+    const meText = await meRes.text().catch(() => "");
+    console.error("[spotify/callback] /v1/me failed:", meRes.status, meText);
+    console.error("[spotify/callback] access_token length:", accessToken?.length ?? 0, "starts with:", accessToken?.slice(0, 10));
+    return NextResponse.redirect(new URL(`/?spotify_error=profile_fetch&status=${meRes.status}`, request.url));
   }
 
   const profile = await meRes.json();
