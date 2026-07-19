@@ -28,7 +28,12 @@ export async function GET(request: NextRequest) {
   if (likedOnly) query = query.eq('is_liked', true)
   if (favoriteOnly) query = query.eq('is_favorite', true)
 
-  const { data: tracks, error } = await query.order('added_at', { ascending: false })
+  // Supabase caps responses at 1000 rows by default. For users with
+  // large libraries (1687+ liked tracks), we need to raise the limit.
+  // 10000 is safely above any realistic personal library.
+  const { data: tracks, error } = await query
+    .order('added_at', { ascending: false })
+    .limit(10000)
 
   if (error) {
     return NextResponse.json(

@@ -132,6 +132,10 @@ export default function SyncButton({
     try {
       // Phase 1: liked songs (its own 60s budget)
       const likedResult = await runPhase("liked", "likedOnly=true");
+      // Show transition label so the progress bar doesn't disappear
+      // between the two HTTP requests (which look like a page refresh).
+      setProgressLabel("Liked songs done — starting albums…");
+      setProgress((prev) => prev ? { ...prev, phase: "albums", label: "Starting album sync…" } : prev);
       // Phase 2: saved albums + album tracks (its own 60s budget)
       const albumsResult = await runPhase("albums", "albumsOnly=true");
 

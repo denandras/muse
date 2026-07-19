@@ -25,7 +25,9 @@ export async function GET(request: NextRequest) {
 
   if (favoriteOnly) query = query.eq('is_favorite', true)
 
-  const { data: albums, error } = await query.order('added_at', { ascending: false })
+  const { data: albums, error } = await query
+    .order('added_at', { ascending: false })
+    .limit(10000)
 
   if (error) {
     return NextResponse.json(
