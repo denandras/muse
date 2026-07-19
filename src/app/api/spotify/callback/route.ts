@@ -45,6 +45,11 @@ export async function GET(request: NextRequest) {
   const accessToken: string = tokens.access_token;
   const refreshToken: string = tokens.refresh_token;
 
+  if (!accessToken || !refreshToken) {
+    console.error("[spotify/callback] Missing token in exchange response:", JSON.stringify(Object.keys(tokens)));
+    return NextResponse.redirect(new URL("/?spotify_error=token_exchange", request.url));
+  }
+
   // ── Fetch Spotify user profile ────────────────────────────────────────────
   const meRes = await fetch("https://api.spotify.com/v1/me", {
     headers: { Authorization: `Bearer ${accessToken}` },

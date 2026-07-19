@@ -26,9 +26,21 @@ export async function GET() {
     response_type: "code",
     redirect_uri: redirectUri,
     scope: SCOPES,
+    // show_dialog forces Spotify to always show the consent screen,
+    // which ensures a fresh authorization even if the user is already
+    // logged in to Spotify with a stale session.
+    show_dialog: "true",
   });
 
-  return NextResponse.redirect(
+  const response = NextResponse.redirect(
     `https://accounts.spotify.com/authorize?${params.toString()}`
   );
+
+  // Clear stale tokens before re-authenticating so the callback
+  // starts fresh. Without this, old expired cookies can interfere
+  // with the new token flow.
+  response.cookies.delete("spotify_access_token");
+  response.cookies.delete("spotify_refresh_token");
+
+  return response;
 }
