@@ -106,26 +106,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Mobile top bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-30 glass-strong border-b border-white/[0.08] px-4 py-3 flex items-center justify-end">
-        {user && (
-          <Link href="/settings" className="flex items-center gap-2">
-            {user.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={user.avatar_url}
-                alt=""
-                className="w-7 h-7 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500/30 to-rose-500/30 flex items-center justify-center">
-                <Music2 size={13} className="text-white/70" />
-              </div>
-            )}
-          </Link>
-        )}
-      </div>
-
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 glass-strong border-t border-white/[0.08] flex items-center justify-around px-2 py-1.5">
         {NAV_ITEMS.map((item) => {
@@ -147,7 +127,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* Main content with page transitions */}
-      <main className="flex-1 min-w-0 pt-14 pb-16 md:pt-0 md:pb-0">
+      <main className="flex-1 min-w-0 pb-16 md:pb-0">
         <AnimatePresence mode="wait">
           <motion.div
             key={pathname}
