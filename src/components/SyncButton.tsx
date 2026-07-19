@@ -260,10 +260,19 @@ function SyncProgressBar({
   onCancel: () => void;
 }) {
   if (!progress) return null;
-  const pct =
+
+  // Show a clean x/n counter instead of an animated bar.
+  // The label from the server already contains human-readable text like
+  // "Importing 5 of 3,000 liked tracks…" — we just show that + a counter.
+  // No animation: the sync runs at API speed (1 page per network round-trip),
+  // so a smooth bar would look janky and low-fps.
+  const counter =
     progress.total > 0
-      ? Math.min(100, Math.round((progress.processed / progress.total) * 100))
-      : null;
+      ? `${progress.processed.toLocaleString()}/${progress.total.toLocaleString()}`
+      : progress.processed > 0
+        ? `${progress.processed.toLocaleString()}`
+        : null;
+
   return (
     <AnimatePresence>
       <motion.div
@@ -274,35 +283,16 @@ function SyncProgressBar({
       >
         <div className="mx-auto max-w-3xl px-4 pt-2">
           <div className="glass-strong rounded-xl px-3 py-2.5 flex items-center gap-3 pointer-events-auto">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <span className="text-xs text-white/70 truncate flex-1">
-                  {progress.label}
+            <RefreshCw size={14} className="animate-spin text-yellow-400 flex-shrink-0" />
+            <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+              <span className="text-xs text-white/70 truncate">
+                {progress.label}
+              </span>
+              {counter && (
+                <span className="text-xs tabular-nums text-yellow-300 font-medium flex-shrink-0">
+                  {counter}
                 </span>
-                {pct !== null && (
-                  <span className="text-[11px] tabular-nums text-yellow-300/80 flex-shrink-0">
-                    {pct}%
-                  </span>
-                )}
-              </div>
-              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full bg-yellow-400"
-                  initial={{ width: pct !== null ? "0%" : "100%" }}
-                  animate={{
-                    width:
-                      pct !== null
-                        ? `${pct}%`
-                        : ["0%", "100%", "0%"],
-                  }}
-                  transition={
-                    pct !== null
-                      ? { duration: 0.3, ease: "easeOut" }
-                      : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }
-                  }
-                  style={{ width: pct !== null ? `${pct}%` : undefined }}
-                />
-              </div>
+              )}
             </div>
             <button
               onClick={onCancel}
