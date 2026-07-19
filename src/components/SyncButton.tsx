@@ -1,0 +1,344 @@
+"use client";
+
+import { useCallback, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { RefreshCw, CheckCircle2, AlertCircle, X } from "lucide-react";
+
+interface SyncState {
+  liked_tracks_synced_at: string | null;
+  saved_albums_synced_at: string | null;
+  total_tracks_imported: number;
+  total_albums_imported: number;
+}
+
+interface ProgressEvent {
+  phase: "liked" | "albums" | "album-tracks" | "done" | "error";
+  page: number;
+  total: number;
+  processed: number;
+  label: string;
+}
+
+interface ImportResult {
+  likedTracksImported: number;
+  albumsImported: number;
+  albumTracksImported: number;
+  likedIncrementalStop: boolean;
+  albumsIncrementalStop: boolean;
+  likedTracksTotal: number;
+  albumsTotal: number;
+}
+
+interface ProgressState {
+  phase: "liked" | "albums" | "album-tracks" | "done" | "error";
+  processed: number;
+  total: number;
+  label: string;
+}
+
+interface SyncButtonProps {
+  onSyncComplete?: () => void;
+  variant?: "header" | "panel";
+}
+
+/**
+ * Button that triggers POST /api/sync/import and streams NDJSON progress.
+ * Shows live progress text and a spinner while running. On completion,
+ * calls onSyncComplete so the parent can refetch library data.
+ */
+export default function SyncButton({
+  onSyncComplete,
+  variant = "header",
+}: SyncButtonProps) {
+  const [running, setRunning] = useState(false);
+  const [progressLabel, setProgressLabel] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ProgressState | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const runSync = useCallback(async () => {
+    setRunning(true);
+    setProgressLabel("Starting sync…");
+    setProgress({ phase: "liked", processed: 0, total: 0, label: "Starting sync…" });
+    setResult(null);
+    setError(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch("/api/sync/import", {
+        method: "POST",
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        const text = await res.text().catch(() => "");
+        setError(`Sync failed (${res.status}): ${text.slice(0, 120)}`);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalResult: ImportResult | null = null;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let obj: Record<string, unknown>;
+          try {
+            obj = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (obj.error) {
+            setError(String(obj.error));
+          } else if (obj.result) {
+            finalResult = obj.result as ImportResult;
+          } else if (obj.label) {
+            setProgressLabel(String(obj.label));
+            // Track numeric progress for the bar
+            const processed = typeof obj.processed === "number" ? obj.processed : 0;
+            const total = typeof obj.total === "number" ? obj.total : 0;
+            const phase = (obj.phase as ProgressState["phase"]) ?? "liked";
+            setProgress({ phase, processed, total, label: String(obj.label) });
+          }
+        }
+      }
+
+      if (finalResult) {
+        setResult(finalResult);
+        setProgressLabel(null);
+        setProgress(null);
+        onSyncComplete?.();
+      }
+    } catch (err) {
+      if ((err as Error).name === "AbortError") {
+        // user cancelled — stay quiet
+      } else {
+        setError(err instanceof Error ? err.message : "Sync failed");
+      }
+    } finally {
+      setRunning(false);
+      abortRef.current = null;
+    }
+  }, [onSyncComplete]);
+
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    setRunning(false);
+    setProgressLabel(null);
+    setProgress(null);
+  }, []);
+
+  const dismissResult = useCallback(() => {
+    setResult(null);
+    setError(null);
+  }, []);
+
+  if (variant === "header") {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={runSync}
+          disabled={running}
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white/[0.06] text-white/80 text-sm hover:bg-white/[0.1] transition-colors disabled:opacity-60"
+          title="Import from Spotify"
+        >
+          {running ? (
+            <RefreshCw size={14} className="animate-spin" />
+          ) : (
+            <RefreshCw size={14} />
+          )}
+          <span className="hidden sm:inline">
+            {running ? "Syncing…" : "Sync"}
+          </span>
+        </button>
+        <AnimatePresence>
+          {running && progressLabel && (
+            <motion.div
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              className="hidden md:flex items-center gap-2 text-xs text-white/50"
+            >
+              <span>{progressLabel}</span>
+              <button
+                onClick={cancel}
+                className="text-white/30 hover:text-white/70"
+                aria-label="Cancel sync"
+              >
+                <X size={12} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <SyncProgressBar progress={progress} onCancel={cancel} />
+        <SyncToast
+          result={result}
+          error={error}
+          onDismiss={dismissResult}
+        />
+      </div>
+    );
+  }
+
+  // panel variant — larger, for a settings/dashboard card
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={runSync}
+          disabled={running}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#1DB954] text-black font-medium text-sm hover:bg-[#1ed760] transition-colors disabled:opacity-60"
+        >
+          {running ? (
+            <RefreshCw size={16} className="animate-spin" />
+          ) : (
+            <RefreshCw size={16} />
+          )}
+          {running ? "Syncing…" : "Import from Spotify"}
+        </button>
+        {running && (
+          <button
+            onClick={cancel}
+            className="text-sm text-white/50 hover:text-white/80"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+      {running && progressLabel && (
+        <div className="text-sm text-white/60">{progressLabel}</div>
+      )}
+      <SyncProgressBar progress={progress} onCancel={cancel} />
+      <SyncToast result={result} error={error} onDismiss={dismissResult} />
+    </div>
+  );
+}
+
+function SyncProgressBar({
+  progress,
+  onCancel,
+}: {
+  progress: ProgressState | null;
+  onCancel: () => void;
+}) {
+  if (!progress) return null;
+  const pct =
+    progress.total > 0
+      ? Math.min(100, Math.round((progress.processed / progress.total) * 100))
+      : null;
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -12 }}
+        className="fixed top-0 left-0 right-0 z-[55] pointer-events-none"
+      >
+        <div className="mx-auto max-w-3xl px-4 pt-2">
+          <div className="glass-strong rounded-xl px-3 py-2.5 flex items-center gap-3 pointer-events-auto">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="text-xs text-white/70 truncate flex-1">
+                  {progress.label}
+                </span>
+                {pct !== null && (
+                  <span className="text-[11px] tabular-nums text-yellow-300/80 flex-shrink-0">
+                    {pct}%
+                  </span>
+                )}
+              </div>
+              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-yellow-400"
+                  initial={{ width: pct !== null ? "0%" : "100%" }}
+                  animate={{
+                    width:
+                      pct !== null
+                        ? `${pct}%`
+                        : ["0%", "100%", "0%"],
+                  }}
+                  transition={
+                    pct !== null
+                      ? { duration: 0.3, ease: "easeOut" }
+                      : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }
+                  }
+                  style={{ width: pct !== null ? `${pct}%` : undefined }}
+                />
+              </div>
+            </div>
+            <button
+              onClick={onCancel}
+              className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
+              aria-label="Cancel sync"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+function SyncToast({
+  result,
+  error,
+  onDismiss,
+}: {
+  result: ImportResult | null;
+  error: string | null;
+  onDismiss: () => void;
+}) {
+  if (error) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl glass-strong px-4 py-2.5 text-sm text-rose-300 flex items-center gap-2 max-w-md"
+      >
+        <AlertCircle size={16} />
+        <span className="truncate">{error}</span>
+        <button onClick={onDismiss} className="ml-2 text-white/40 hover:text-white/80">
+          <X size={14} />
+        </button>
+      </motion.div>
+    );
+  }
+  if (!result) return null;
+  const newTracks = result.likedTracksImported + result.albumTracksImported;
+  const note =
+    (result.likedIncrementalStop || result.albumsIncrementalStop)
+      ? " · incremental (stopped early)"
+      : "";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl glass-strong px-4 py-2.5 text-sm text-white/90 flex items-center gap-2"
+    >
+      <CheckCircle2 size={16} className="text-green-400" />
+      <span>
+        Imported {newTracks} new track{newTracks === 1 ? "" : "s"}
+        {result.albumsImported > 0 &&
+          `, ${result.albumsImported} album${result.albumsImported === 1 ? "" : "s"}`}
+        {note}
+      </span>
+      <button onClick={onDismiss} className="ml-2 text-white/40 hover:text-white/80">
+        <X size={14} />
+      </button>
+    </motion.div>
+  );
+}
+
+export type { SyncState, ProgressEvent, ImportResult };
