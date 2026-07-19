@@ -9,9 +9,9 @@ import {
   ChevronRight,
   StickyNote,
   Music,
-  Heart,
   HeartCrack,
   Pencil,
+  Check,
 } from "lucide-react";
 import type { Track } from "@/lib/types";
 import { usePlayback } from "@/lib/playback";
@@ -30,6 +30,8 @@ interface TrackRowProps {
   showAlbumCover?: boolean;
   indent?: number;
   readOnly?: boolean;
+  /** Show the "In Liked Songs" badge. Default true; set false on the Liked page. */
+  showLikedBadge?: boolean;
 }
 
 export default function TrackRow({
@@ -42,6 +44,7 @@ export default function TrackRow({
   showAlbumCover = true,
   indent = 0,
   readOnly = false,
+  showLikedBadge = true,
 }: TrackRowProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [removingFromLiked, setRemovingFromLiked] = useState(false);
@@ -134,8 +137,11 @@ export default function TrackRow({
             >
               {track.title}
             </button>
-            {track.is_liked && (
-              <Heart size={11} className="text-rose-400 fill-rose-400 flex-shrink-0" />
+            {track.is_liked && showLikedBadge && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-green-400/80 font-medium flex-shrink-0">
+                <Check size={11} className="text-green-400" strokeWidth={2.5} />
+                Liked
+              </span>
             )}
             {!readOnly && onOpenDetail && (
               <button

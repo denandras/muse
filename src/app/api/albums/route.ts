@@ -25,18 +25,29 @@ export async function GET(request: NextRequest) {
 
   if (favoriteOnly) query = query.eq('is_favorite', true)
 
-  const { data: albums, error } = await query
-    .order('added_at', { ascending: false })
-    .limit(10000)
+  // Paginate to bypass Supabase's 1000-row default cap.
+  const PAGE_SIZE = 1000
+  let allAlbums: Record<string, unknown>[] = []
+  let offset = 0
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data: page, error } = await query
+      .order('added_at', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1)
 
-  if (error) {
-    return NextResponse.json(
-      { error: 'Failed to fetch albums', detail: error.message },
-      { status: 500 }
-    )
+    if (error) {
+      return NextResponse.json(
+        { error: 'Failed to fetch albums', detail: error.message },
+        { status: 500 }
+      )
+    }
+
+    allAlbums = allAlbums.concat(page ?? [])
+    if (!page || page.length < PAGE_SIZE) break
+    offset += PAGE_SIZE
   }
 
-  const result = (albums ?? []).map((a: Record<string, unknown>) => ({
+  const result = allAlbums.map((a: Record<string, unknown>) => ({
     ...a,
     genres:
       (a.album_genres as Array<{ genres: Record<string, unknown> }>)?.map(

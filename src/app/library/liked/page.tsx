@@ -162,6 +162,7 @@ export default function LikedPage() {
                 >
                   <TrackRow
                     track={track}
+                    showLikedBadge={false}
                     onRate={(s) => rateTrack(track.id, s)}
                     onRemoveFromLiked={() =>
                       setTracks((prev) =>
@@ -183,7 +184,7 @@ export default function LikedPage() {
               </h2>
               <div className="flex flex-col gap-1.5 opacity-60">
                 {organized.map((track) => (
-                  <TrackRow key={track.id} track={track} readOnly />
+                  <TrackRow key={track.id} track={track} readOnly showLikedBadge={false} />
                 ))}
               </div>
             </>

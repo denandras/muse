@@ -202,7 +202,7 @@ function GenreTreeItem({
             {genre.track_count} tracks
           </span>
         )}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
           <button
             onClick={onCreateChild}
             className="w-7 h-7 rounded-md hover:bg-white/10 text-white/40 hover:text-white/80 flex items-center justify-center"

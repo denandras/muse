@@ -372,12 +372,9 @@ export default function LibraryPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-white/90">Library</h1>
-        <div className="flex items-center gap-3">
-          <SyncButton onSyncComplete={loadLibrary} variant="header" />
-          <ViewModeSwitch value={view} onChange={setView} />
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <SyncButton onSyncComplete={loadLibrary} variant="header" />
+        <ViewModeSwitch value={view} onChange={setView} />
       </div>
 
       <FilterBar

@@ -28,22 +28,31 @@ export async function GET(request: NextRequest) {
   if (likedOnly) query = query.eq('is_liked', true)
   if (favoriteOnly) query = query.eq('is_favorite', true)
 
-  // Supabase caps responses at 1000 rows by default. For users with
-  // large libraries (1687+ liked tracks), we need to raise the limit.
-  // 10000 is safely above any realistic personal library.
-  const { data: tracks, error } = await query
-    .order('added_at', { ascending: false })
-    .limit(10000)
+  // Supabase (PostgREST) caps responses at 1000 rows by default.
+  // Paginate with .range() to fetch all rows for users with large libraries.
+  const PAGE_SIZE = 1000
+  let allTracks: Record<string, unknown>[] = []
+  let offset = 0
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data: page, error } = await query
+      .order('added_at', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1)
 
-  if (error) {
-    return NextResponse.json(
-      { error: 'Failed to fetch tracks', detail: error.message },
-      { status: 500 }
-    )
+    if (error) {
+      return NextResponse.json(
+        { error: 'Failed to fetch tracks', detail: error.message },
+        { status: 500 }
+      )
+    }
+
+    allTracks = allTracks.concat(page ?? [])
+    if (!page || page.length < PAGE_SIZE) break
+    offset += PAGE_SIZE
   }
 
   // Flatten the join structure into a more convenient shape
-  const result = (tracks ?? []).map((t: Record<string, unknown>) => ({
+  const result = allTracks.map((t: Record<string, unknown>) => ({
     ...t,
     genres: (t.track_genres as Array<{ genres: Record<string, unknown> }>)?.map(
       (g) => g.genres

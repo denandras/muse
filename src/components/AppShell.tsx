@@ -98,13 +98,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   className="w-8 h-8 rounded-full object-cover"
                 />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs text-white/60">
-                  {(user.display_name || "?").slice(0, 1).toUpperCase()}
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/30 to-rose-500/30 flex items-center justify-center text-xs text-white/70">
+                  <Music2 size={14} />
                 </div>
               )}
               <div className="min-w-0">
                 <div className="text-sm text-white/90 truncate">
-                  {user.display_name || "User"}
+                  {user.display_name || user.spotify_id || "User"}
                 </div>
                 <div className="text-xs text-white/40 truncate">
                   {user.spotify_product === "premium" ? "Premium" : "Free"}
@@ -134,8 +134,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 className="w-7 h-7 rounded-full object-cover"
               />
             ) : (
-              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs text-white/60">
-                {(user.display_name || "?").slice(0, 1).toUpperCase()}
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500/30 to-rose-500/30 flex items-center justify-center">
+                <Music2 size={13} className="text-white/70" />
               </div>
             )}
           </Link>
