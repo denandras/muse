@@ -29,6 +29,7 @@ export default function PlaylistsPage() {
   const [genres, setGenres] = useState<Genre[]>([]);
   const [moods, setMoods] = useState<Mood[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -38,18 +39,26 @@ export default function PlaylistsPage() {
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
 
   useEffect(() => {
+    let active = true;
     Promise.all([
       fetch("/api/spotify/playlists").then((r) => r.json()),
       fetch("/api/genres").then((r) => r.json()),
       fetch("/api/moods").then((r) => r.json()),
     ])
       .then(([p, g, m]) => {
-        setPlaylists(Array.isArray(p) ? p : p.playlists ?? []);
-        setGenres(Array.isArray(g) ? g : g.genres ?? []);
-        setMoods(Array.isArray(m) ? m : m.moods ?? []);
+        if (!active) return;
+        setPlaylists(Array.isArray(p) ? p : p?.playlists ?? []);
+        setGenres(Array.isArray(g) ? g : g?.genres ?? []);
+        setMoods(Array.isArray(m) ? m : m?.moods ?? []);
+        if (p?.error && !p?.playlists) {
+          setError(String(p.error));
+        }
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleImport = useCallback(
@@ -121,6 +130,10 @@ export default function PlaylistsPage() {
       {loading ? (
         <div className="flex items-center justify-center p-12">
           <Loader2 className="animate-spin text-white/40" size={24} />
+        </div>
+      ) : error ? (
+        <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-4 py-3 text-sm text-amber-200">
+          {error}. You may need to sign out and reconnect Spotify to grant playlist access.
         </div>
       ) : playlists.length === 0 ? (
         <div className="text-center py-16 text-sm text-white/30 rounded-xl bg-white/[0.02] border border-white/[0.04]">
