@@ -52,6 +52,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       .catch(() => setUser(null));
   }, [isLanding, pathname]);
 
+  // Auto-redirect to landing page when the session is truly dead.
+  // This happens when the refresh token is expired/revoked and the
+  // server can't authenticate the user anymore. We give it a slight
+  // delay so the reconnect banner is visible before the redirect.
+  useEffect(() => {
+    if (isLanding || !sessionExpired) return;
+    const timer = setTimeout(() => {
+      window.location.href = "/";
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [isLanding, sessionExpired]);
+
   // Landing page renders standalone without nav.
   if (isLanding) {
     return <>{children}</>;
@@ -59,7 +71,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <ReconnectBanner show={showReconnect} />
+      <ReconnectBanner show={showReconnect} countdown={sessionExpired ? 4 : undefined} />
       {/* Sidebar nav (desktop) */}
       <aside className="hidden md:flex flex-col w-56 flex-shrink-0 border-r border-white/[0.06] bg-white/[0.02] p-4 gap-1">
         <Link
