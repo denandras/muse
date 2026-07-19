@@ -427,13 +427,16 @@ export async function importLikedTracks(
 
     const { inserted, existingIds } = await upsertTracks(supabase, rows);
     imported += inserted;
+    const scanned = page * pageSize;
 
     onProgress({
       phase: "liked",
       page,
       total,
-      processed: imported,
-      label: `Importing ${imported.toLocaleString()} of ${total.toLocaleString()} liked tracks…`,
+      processed: Math.min(scanned, total),
+      label: imported > 0
+        ? `Importing ${imported.toLocaleString()} new of ${total.toLocaleString()} liked tracks…`
+        : `Scanning ${Math.min(scanned, total).toLocaleString()}/${total.toLocaleString()} liked tracks…`,
     });
 
     // Incremental stop heuristic
@@ -577,13 +580,16 @@ export async function importSavedAlbums(
       multiTrackAlbumRows
     );
     albumsImported += inserted;
+    const albumsScanned = page * pageSize;
 
     onProgress({
       phase: "albums",
       page,
       total: albumsTotal,
-      processed: albumsImported,
-      label: `Importing ${albumsImported.toLocaleString()} of ${albumsTotal.toLocaleString()} saved albums…`,
+      processed: Math.min(albumsScanned, albumsTotal),
+      label: albumsImported > 0
+        ? `Importing ${albumsImported.toLocaleString()} new of ${albumsTotal.toLocaleString()} saved albums…`
+        : `Scanning ${Math.min(albumsScanned, albumsTotal).toLocaleString()}/${albumsTotal.toLocaleString()} saved albums…`,
     });
 
     // Upsert the single-track-as-track rows (they bypassed the albums table).

@@ -352,9 +352,13 @@ function SyncToast({
     >
       <CheckCircle2 size={16} className="text-green-400" />
       <span>
-        Imported {newTracks} new track{newTracks === 1 ? "" : "s"}
-        {result.albumsImported > 0 &&
-          `, ${result.albumsImported} album${result.albumsImported === 1 ? "" : "s"}`}
+        {newTracks === 0 && result.albumsImported === 0
+          ? "Already up to date"
+          : `Imported ${newTracks} new track${newTracks === 1 ? "" : "s"}${
+              result.albumsImported > 0
+                ? `, ${result.albumsImported} album${result.albumsImported === 1 ? "" : "s"}`
+                : ""
+            }`}
         {note}
       </span>
       <button onClick={onDismiss} className="ml-2 text-white/40 hover:text-white/80">
