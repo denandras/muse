@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Settings as SettingsIcon, Loader2, LogOut, RefreshCw } from "lucide-react";
+import { Loader2, LogOut, RefreshCw } from "lucide-react";
 import type { User, UserSettings } from "@/lib/types";
 import SyncButton from "@/components/SyncButton";
 import type { SyncState } from "@/components/SyncButton";
@@ -26,12 +26,12 @@ export default function SettingsPage() {
     let active = true;
     Promise.all([
       fetch("/api/user").then((r) => r.json()),
-      fetch("/api/settings").then((r) => r.json()),
+      fetch("/api/user/settings").then((r) => r.json()),
     ])
       .then(([u, s]) => {
         if (!active) return;
-        setUser(u);
-        setSettings(s);
+        setUser(u.user ?? u);
+        setSettings(s.settings ?? s);
       })
       .finally(() => active && setLoading(false));
     loadSyncState();
@@ -50,7 +50,7 @@ export default function SettingsPage() {
       setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
       setSaving(true);
       try {
-        await fetch("/api/settings", {
+        await fetch("/api/user/settings", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(patch),
@@ -95,11 +95,6 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 sm:p-6 flex flex-col gap-5">
-      <div className="flex items-center gap-2">
-        <SettingsIcon className="text-white/60" size={20} />
-        <h1 className="text-xl font-semibold text-white/90">Settings</h1>
-      </div>
-
       {/* Profile card */}
       <section className="rounded-2xl glass p-5 flex flex-col gap-4">
         <h2 className="text-xs uppercase tracking-wide text-white/40">Profile</h2>

@@ -192,15 +192,24 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
 
     const isSameTrack = currentSpotifyUriRef.current === spotifyUri;
 
+    // Detect URI type: album/artist URIs use context_uri, track URIs use uris[]
+    const isAlbumUri = spotifyUri.startsWith("spotify:album:");
+    const isArtistUri = spotifyUri.startsWith("spotify:artist:");
+    const isContextUri = isAlbumUri || isArtistUri;
+
+    const body = isSameTrack
+      ? undefined // Resume current track if same
+      : isContextUri
+      ? JSON.stringify({ context_uri: spotifyUri })
+      : JSON.stringify({ uris: [spotifyUri] });
+
     // Start playback on our device with the specified track
     const playRes = await fetch(
       `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
       {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
-        body: isSameTrack
-          ? undefined // Resume current track if same
-          : JSON.stringify({ uris: [spotifyUri] }),
+        body,
       }
     );
 

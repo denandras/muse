@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ListMusic,
   Loader2,
   Download,
   ChevronDown,
@@ -114,11 +113,6 @@ export default function PlaylistsPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <ListMusic className="text-green-400" size={20} />
-        <h1 className="text-xl font-semibold text-white/90">Playlists</h1>
-      </div>
-
       <p className="text-sm text-white/50 max-w-2xl">
         Import tracks from your Spotify playlists into Muse. Optionally assign
         genres and moods to all imported tracks at once.

@@ -41,6 +41,12 @@ export default function AlbumRow({
   const [expanded, setExpanded] = useState(false);
   const { play } = usePlayback();
 
+  // Singles (one-track albums) shouldn't be expandable — they're the
+  // same thing as their one track. album_type 'single' is the Spotify
+  // signal; also fallback to track count if album_type is missing.
+  const isSingle = album.album_type === "single" || (tracks.length <= 1 && !album.album_type);
+  const canExpand = !isSingle && tracks.length > 1;
+
   const playAlbum = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (album.spotify_uri) {
@@ -57,17 +63,21 @@ export default function AlbumRow({
     >
       {/* Album header */}
       <div
-        className="group flex items-center gap-3 px-3 py-3 cursor-pointer"
-        onClick={() => setExpanded((v) => !v)}
+        className={`group flex items-center gap-3 px-3 py-3 ${canExpand ? "cursor-pointer" : ""}`}
+        onClick={() => canExpand && setExpanded((v) => !v)}
       >
-        {/* Expand chevron */}
-        <button
-          type="button"
-          className="text-white/40 hover:text-white/80 transition-colors flex-shrink-0"
-          aria-label={expanded ? "Collapse album" : "Expand album"}
-        >
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </button>
+        {/* Expand chevron — hidden for singles */}
+        <div className="flex-shrink-0 w-5">
+          {canExpand && (
+            <button
+              type="button"
+              className="text-white/40 hover:text-white/80 transition-colors"
+              aria-label={expanded ? "Collapse album" : "Expand album"}
+            >
+              {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+          )}
+        </div>
 
         {/* Cover */}
         <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-white/[0.06]">
@@ -115,8 +125,7 @@ export default function AlbumRow({
           <div className="text-xs text-white/40 truncate">
             {album.artist}
             {album.release_date ? ` · ${album.release_date.slice(0, 4)}` : ""}
-            {album.album_type ? ` · ${album.album_type}` : ""}
-            {tracks.length > 0 ? ` · ${tracks.length} tracks` : ""}
+            {canExpand ? ` · ${tracks.length} tracks` : ""}
           </div>
         </div>
 
@@ -148,7 +157,7 @@ export default function AlbumRow({
       </div>
 
       <AnimatePresence initial={false}>
-        {expanded && (
+        {expanded && canExpand && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}

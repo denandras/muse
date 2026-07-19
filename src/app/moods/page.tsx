@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Palette, Plus, Pencil, Trash2, Loader2, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, X } from "lucide-react";
 import type { Mood } from "@/lib/types";
 
 const DEFAULT_COLORS = [
@@ -40,11 +40,7 @@ export default function MoodsPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Palette className="text-pink-400" size={20} />
-          <h1 className="text-xl font-semibold text-white/90">Moods</h1>
-        </div>
+      <div className="flex items-center justify-end gap-3">
         <button
           onClick={() => setModal({ kind: "create" })}
           className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-pink-500/20 text-pink-200 border border-pink-500/30 text-sm hover:bg-pink-500/30 transition-colors"

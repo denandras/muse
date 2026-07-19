@@ -60,9 +60,9 @@ export default function FilterBar({
   walk(genres, 0, "");
 
   return (
-    <div className="flex flex-col gap-3 p-4 rounded-2xl glass">
+    <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl glass">
       {/* Search */}
-      <div className="relative">
+      <div className="relative flex-1 min-w-[200px]">
         <Search
           size={16}
           className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
@@ -71,8 +71,8 @@ export default function FilterBar({
           type="search"
           value={filters.search}
           onChange={(e) => onChange({ search: e.target.value })}
-          placeholder="Search title, artist, album..."
-          className="w-full h-10 pl-9 pr-9 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
+          placeholder="Search…"
+          className="w-full h-9 pl-9 pr-9 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
         />
         {filters.search && (
           <button
@@ -86,145 +86,113 @@ export default function FilterBar({
         )}
       </div>
 
-      {/* Filters row */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Genre */}
-        <div className="relative">
-          <select
-            value={filters.genreId ?? ""}
-            onChange={(e) =>
-              onChange({ genreId: e.target.value || null })
-            }
-            className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
-          >
-            <option value="">All genres</option>
-            {flatGenres.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={14}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
-          />
-        </div>
+      {/* Genre */}
+      <div className="relative">
+        <select
+          value={filters.genreId ?? ""}
+          onChange={(e) => onChange({ genreId: e.target.value || null })}
+          className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+        >
+          <option value="">All genres</option>
+          {flatGenres.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+      </div>
 
-        {/* Include subgenres checkbox */}
+      {/* Include subgenres — only visible when a genre is selected */}
+      {filters.genreId && (
         <label className="inline-flex items-center gap-1.5 text-xs text-white/50 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={filters.includeSubgenres}
-            onChange={(e) =>
-              onChange({ includeSubgenres: e.target.checked })
-            }
+            onChange={(e) => onChange({ includeSubgenres: e.target.checked })}
             className="w-3.5 h-3.5 rounded accent-violet-500"
           />
-          Include subgenres
+          Subgenres
         </label>
+      )}
 
-        {/* Mood */}
+      {/* Mood */}
+      <div className="relative">
+        <select
+          value={filters.moodId ?? ""}
+          onChange={(e) => onChange({ moodId: e.target.value || null })}
+          className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+        >
+          <option value="">All moods</option>
+          {moods.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+      </div>
+
+      {/* Stars */}
+      <div className="relative">
+        <select
+          value={filters.stars ?? ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({ stars: v === "" ? null : v === "unrated" ? "unrated" : Number(v) });
+          }}
+          className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+        >
+          {STARS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+      </div>
+
+      {/* Favorites only — heart icon toggle */}
+      <button
+        type="button"
+        onClick={() => onChange({ favoritesOnly: !filters.favoritesOnly })}
+        className={`flex items-center justify-center h-9 w-9 rounded-xl border transition-colors ${
+          filters.favoritesOnly
+            ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
+            : "bg-white/[0.04] border-white/[0.06] text-white/30 hover:text-white/60"
+        }`}
+        title={filters.favoritesOnly ? "Showing favorites only" : "Show favorites only"}
+        aria-pressed={filters.favoritesOnly}
+        aria-label="Toggle favorites only"
+      >
+        <Heart size={15} className={filters.favoritesOnly ? "fill-rose-400" : ""} strokeWidth={1.5} />
+      </button>
+
+      {/* Sort + direction toggle */}
+      <div className="flex items-center gap-1 ml-auto">
         <div className="relative">
           <select
-            value={filters.moodId ?? ""}
-            onChange={(e) =>
-              onChange({ moodId: e.target.value || null })
-            }
+            value={filters.sort}
+            onChange={(e) => onChange({ sort: e.target.value as SortKey })}
             className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
           >
-            <option value="">All moods</option>
-            {moods.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={14}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
-          />
-        </div>
-
-        {/* Stars */}
-        <div className="relative">
-          <select
-            value={filters.stars ?? ""}
-            onChange={(e) => {
-              const v = e.target.value;
-              onChange({
-                stars: v === "" ? null : v === "unrated" ? "unrated" : Number(v),
-              });
-            }}
-            className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
-          >
-            {STARS_OPTIONS.map((o) => (
+            {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
           </select>
-          <ChevronDown
-            size={14}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
-          />
+          <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
         </div>
-
-        {/* Favorites only — heart icon toggle */}
         <button
           type="button"
-          onClick={() => onChange({ favoritesOnly: !filters.favoritesOnly })}
-          className={`flex items-center justify-center h-9 w-9 rounded-xl border transition-colors ${
-            filters.favoritesOnly
-              ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
-              : "bg-white/[0.04] border-white/[0.06] text-white/30 hover:text-white/60"
-          }`}
-          title={filters.favoritesOnly ? "Showing favorites only (click to show all)" : "Show favorites only"}
-          aria-pressed={filters.favoritesOnly}
-          aria-label="Toggle favorites only"
+          onClick={() => onChange({ sortDirection: filters.sortDirection === "asc" ? "desc" : "asc" })}
+          className="h-9 w-9 flex items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/60 hover:text-white/90 hover:bg-white/[0.08] transition-colors"
+          title={filters.sortDirection === "asc" ? "Ascending" : "Descending"}
+          aria-label={`Sort ${filters.sortDirection === "asc" ? "ascending" : "descending"}`}
         >
-          <Heart
-            size={15}
-            className={filters.favoritesOnly ? "fill-rose-400" : ""}
-            strokeWidth={1.5}
-          />
+          {filters.sortDirection === "asc" ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
         </button>
-
-        {/* Sort + direction toggle */}
-        <div className="flex items-center gap-1 ml-auto">
-          <div className="relative">
-            <select
-              value={filters.sort}
-              onChange={(e) => onChange({ sort: e.target.value as SortKey })}
-              className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
-            >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  Sort: {o.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              size={14}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
-            />
-          </div>
-          {/* Sort direction toggle: click to flip asc/desc */}
-          <button
-            type="button"
-            onClick={() =>
-              onChange({ sortDirection: filters.sortDirection === "asc" ? "desc" : "asc" })
-            }
-            className="h-9 w-9 flex items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/60 hover:text-white/90 hover:bg-white/[0.08] transition-colors"
-            title={filters.sortDirection === "asc" ? "Ascending (click for descending)" : "Descending (click for ascending)"}
-            aria-label={`Sort ${filters.sortDirection === "asc" ? "ascending" : "descending"}`}
-          >
-            {filters.sortDirection === "asc" ? (
-              <ArrowUp size={15} />
-            ) : (
-              <ArrowDown size={15} />
-            )}
-          </button>
-        </div>
       </div>
     </div>
   );
