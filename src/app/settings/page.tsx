@@ -97,7 +97,6 @@ export default function SettingsPage() {
     <div className="max-w-2xl mx-auto p-4 sm:p-6 flex flex-col gap-5">
       {/* Profile card */}
       <section className="rounded-2xl glass p-5 flex flex-col gap-4">
-        <h2 className="text-xs uppercase tracking-wide text-white/40">Profile</h2>
         <div className="flex items-center gap-4">
           {user.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -142,9 +141,6 @@ export default function SettingsPage() {
 
       {/* Spotify connection */}
       <section className="rounded-2xl glass p-5 flex flex-col gap-3">
-        <h2 className="text-xs uppercase tracking-wide text-white/40">
-          Spotify connection
-        </h2>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span
@@ -168,9 +164,6 @@ export default function SettingsPage() {
 
       {/* Spotify sync */}
       <section className="rounded-2xl glass p-5 flex flex-col gap-4">
-        <h2 className="text-xs uppercase tracking-wide text-white/40">
-          Spotify sync
-        </h2>
         <p className="text-sm text-white/60">
           Import your liked songs and saved albums into Muse. Re-running
           sync only fetches new items.
@@ -212,10 +205,6 @@ export default function SettingsPage() {
 
       {/* Preferences */}
       <section className="rounded-2xl glass p-5 flex flex-col gap-4">
-        <h2 className="text-xs uppercase tracking-wide text-white/40">
-          Preferences
-        </h2>
-
         <label className="flex flex-col gap-1.5">
           <span className="text-sm text-white/80">Play count window</span>
           <span className="text-xs text-white/40">

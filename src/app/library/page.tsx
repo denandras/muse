@@ -393,9 +393,6 @@ export default function LibraryPage() {
       {/* Albums */}
       {showAlbums && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-xs uppercase tracking-wide text-white/40 px-1">
-            Albums
-          </h2>
           <motion.div
             initial="hidden"
             animate="visible"
@@ -445,9 +442,6 @@ export default function LibraryPage() {
       {/* Tracks (only when not inside an album view) */}
       {showTracks && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-xs uppercase tracking-wide text-white/40 px-1">
-            Tracks
-          </h2>
           <motion.div
             initial="hidden"
             animate="visible"
