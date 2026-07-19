@@ -14,6 +14,8 @@ import {
   Music2,
 } from "lucide-react";
 import type { User } from "@/lib/types";
+import { usePlayback } from "@/lib/playback";
+import ReconnectBanner from "@/components/ReconnectBanner";
 
 const NAV_ITEMS = [
   { href: "/library", label: "Library", icon: Library },
@@ -27,15 +29,28 @@ const NAV_ITEMS = [
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const isLanding = pathname === "/";
+  const { authError: sdkAuthError } = usePlayback();
+
+  // Show reconnect banner if either the server says the session is dead
+  // (401 from /api/user) or the Spotify SDK fired authentication_error.
+  const showReconnect = sessionExpired || sdkAuthError;
 
   useEffect(() => {
     if (isLanding) return;
     fetch("/api/user", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (r.status === 401) {
+          setSessionExpired(true);
+          return null;
+        }
+        setSessionExpired(false);
+        return r.ok ? r.json() : null;
+      })
       .then(setUser)
       .catch(() => setUser(null));
-  }, [isLanding]);
+  }, [isLanding, pathname]);
 
   // Landing page renders standalone without nav.
   if (isLanding) {
@@ -44,6 +59,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      <ReconnectBanner show={showReconnect} />
       {/* Sidebar nav (desktop) */}
       <aside className="hidden md:flex flex-col w-56 flex-shrink-0 border-r border-white/[0.06] bg-white/[0.02] p-4 gap-1">
         <Link

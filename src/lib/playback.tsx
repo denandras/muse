@@ -26,6 +26,8 @@ interface PlaybackState {
   spotifyConnected: boolean;
   /** Whether the user has Spotify Premium. Play calls are gated on this. */
   isPremium: boolean;
+  /** True when the Spotify SDK fired authentication_error — refresh token is dead. */
+  authError: boolean;
   /** Play a track by its id. Pass the Spotify URI to play via the Web Playback SDK. */
   play: (trackId: string, title?: string, spotifyUri?: string | null) => void;
   /** Pause playback. */
@@ -132,6 +134,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   const [spotifyReady, setSpotifyReady] = useState(false);
   const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
+  const [authError, setAuthError] = useState(false);
 
   // Keep refs to current values so event listeners see latest state
   const currentTrackIdRef = useRef<string | null>(null);
@@ -328,9 +331,10 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
           player.addListener("initialization_error", (err: any) =>
             console.error("Spotify init error:", err)
           );
-          player.addListener("authentication_error", (err: any) =>
-            console.error("Spotify auth error:", err)
-          );
+          player.addListener("authentication_error", (err: any) => {
+            console.error("Spotify auth error:", err);
+            setAuthError(true);
+          });
           player.addListener("account_error", (err: any) => {
             console.error("Spotify account error (Premium required?):", err);
             // Surface the non-Premium state — the player will not become ready.
@@ -447,6 +451,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     spotifyReady,
     spotifyConnected,
     isPremium,
+    authError,
     play,
     pause,
     resume,
