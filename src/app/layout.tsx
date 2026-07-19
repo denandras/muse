@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { PlaybackProvider } from "@/lib/playback";
 import MiniPlayer from "@/components/MiniPlayer";
+import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
   title: "Muse — Music Organizer",
@@ -25,7 +26,7 @@ export default function RootLayout({
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full bg-[#0a0a0a] text-white">
         <PlaybackProvider>
-          {children}
+          <AppShell>{children}</AppShell>
           <MiniPlayer />
         </PlaybackProvider>
       </body>

@@ -29,6 +29,7 @@ export default function LibraryPage() {
     stars: null,
     favoritesOnly: false,
     sort: "added_at",
+    sortDirection: "desc",
   });
 
   // Track detail modal state
@@ -116,7 +117,7 @@ export default function LibraryPage() {
         }
         return true;
       })
-      .sort((a, b) => sortTracks(a, b, filters.sort));
+      .sort((a, b) => sortTracks(a, b, filters.sort, filters.sortDirection));
   }, [tracks, filters, expandedGenreIds]);
 
   // Filter albums.
@@ -145,7 +146,7 @@ export default function LibraryPage() {
         }
         return true;
       })
-      .sort((a, b) => sortAlbums(a, b, filters.sort));
+      .sort((a, b) => sortAlbums(a, b, filters.sort, filters.sortDirection));
   }, [albums, filters, expandedGenreIds]);
 
   // Tracks grouped by album spotify id (for album expansion).
@@ -174,14 +175,22 @@ export default function LibraryPage() {
 
   const toggleTrackFavorite = useCallback(
     async (trackId: string, value: boolean) => {
-      await fetch(`/api/tracks/${trackId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_favorite: value }),
-      });
+      // Optimistic update — flip the heart immediately
       setTracks((prev) =>
         prev.map((t) => (t.id === trackId ? { ...t, is_favorite: value } : t))
       );
+      try {
+        await fetch(`/api/tracks/${trackId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_favorite: value }),
+        });
+      } catch {
+        // Revert on failure
+        setTracks((prev) =>
+          prev.map((t) => (t.id === trackId ? { ...t, is_favorite: !value } : t))
+        );
+      }
     },
     []
   );
@@ -199,14 +208,22 @@ export default function LibraryPage() {
 
   const toggleAlbumFavorite = useCallback(
     async (albumId: string, value: boolean) => {
-      await fetch(`/api/albums/${albumId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_favorite: value }),
-      });
+      // Optimistic update
       setAlbums((prev) =>
         prev.map((a) => (a.id === albumId ? { ...a, is_favorite: value } : a))
       );
+      try {
+        await fetch(`/api/albums/${albumId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_favorite: value }),
+        });
+      } catch {
+        // Revert on failure
+        setAlbums((prev) =>
+          prev.map((a) => (a.id === albumId ? { ...a, is_favorite: !value } : a))
+        );
+      }
     },
     []
   );
@@ -499,40 +516,59 @@ function EmptyState({ label }: { label: string }) {
   );
 }
 
-function sortTracks(a: Track, b: Track, key: FilterState["sort"]): number {
+function sortTracks(
+  a: Track,
+  b: Track,
+  key: FilterState["sort"],
+  direction: FilterState["sortDirection"]
+): number {
+  const mul = direction === "asc" ? 1 : -1;
   switch (key) {
     case "title":
-      return a.title.localeCompare(b.title);
+      return a.title.localeCompare(b.title) * mul;
     case "artist":
-      return a.artist.localeCompare(b.artist);
+      return a.artist.localeCompare(b.artist) * mul;
+    case "album":
+      return (a.album_title ?? "").localeCompare(b.album_title ?? "") * mul;
     case "stars":
-      return (b.stars ?? 0) - (a.stars ?? 0);
+      return ((a.stars ?? 0) - (b.stars ?? 0)) * mul;
     case "play_count":
-      return b.play_count_all_time - a.play_count_all_time;
+      return (a.play_count_all_time - b.play_count_all_time) * mul;
     case "added_at":
-      return new Date(b.added_at).getTime() - new Date(a.added_at).getTime();
+      return (new Date(a.added_at).getTime() - new Date(b.added_at).getTime()) * mul;
     case "last_played_at": {
       const av = a.last_played_at ? new Date(a.last_played_at).getTime() : 0;
       const bv = b.last_played_at ? new Date(b.last_played_at).getTime() : 0;
-      return bv - av;
+      return (av - bv) * mul;
+    }
+    case "updated_at": {
+      const av = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const bv = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return (av - bv) * mul;
     }
     default:
       return 0;
   }
 }
 
-function sortAlbums(a: Album, b: Album, key: FilterState["sort"]): number {
+function sortAlbums(
+  a: Album,
+  b: Album,
+  key: FilterState["sort"],
+  direction: FilterState["sortDirection"]
+): number {
+  const mul = direction === "asc" ? 1 : -1;
   switch (key) {
     case "title":
-      return a.title.localeCompare(b.title);
+      return a.title.localeCompare(b.title) * mul;
     case "artist":
-      return a.artist.localeCompare(b.artist);
+      return a.artist.localeCompare(b.artist) * mul;
     case "stars":
-      return (b.stars ?? 0) - (a.stars ?? 0);
+      return ((a.stars ?? 0) - (b.stars ?? 0)) * mul;
     case "play_count":
       return 0; // albums have no play count
     case "added_at":
-      return new Date(b.added_at).getTime() - new Date(a.added_at).getTime();
+      return (new Date(a.added_at).getTime() - new Date(b.added_at).getTime()) * mul;
     case "last_played_at":
       return 0;
     default:

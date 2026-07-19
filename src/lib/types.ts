@@ -98,3 +98,5 @@ export type SortKey =
   | "added_at"
   | "last_played_at"
   | "updated_at";
+
+export type SortDirection = "asc" | "desc";

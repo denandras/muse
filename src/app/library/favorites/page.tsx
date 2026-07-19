@@ -42,12 +42,21 @@ export default function FavoritesPage() {
 
   const toggleTrackFavorite = useCallback(
     async (trackId: string, value: boolean) => {
-      await fetch(`/api/tracks/${trackId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_favorite: value }),
-      });
-      setTracks((prev) => prev.filter((t) => t.id !== trackId || value));
+      // Optimistic update
+      setTracks((prev) =>
+        prev.map((t) => (t.id === trackId ? { ...t, is_favorite: value } : t))
+      );
+      try {
+        await fetch(`/api/tracks/${trackId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_favorite: value }),
+        });
+      } catch {
+        setTracks((prev) =>
+          prev.map((t) => (t.id === trackId ? { ...t, is_favorite: !value } : t))
+        );
+      }
     },
     []
   );
@@ -65,12 +74,21 @@ export default function FavoritesPage() {
 
   const toggleAlbumFavorite = useCallback(
     async (albumId: string, value: boolean) => {
-      await fetch(`/api/albums/${albumId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_favorite: value }),
-      });
-      setAlbums((prev) => prev.filter((a) => a.id !== albumId || value));
+      // Optimistic update
+      setAlbums((prev) =>
+        prev.map((a) => (a.id === albumId ? { ...a, is_favorite: value } : a))
+      );
+      try {
+        await fetch(`/api/albums/${albumId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_favorite: value }),
+        });
+      } catch {
+        setAlbums((prev) =>
+          prev.map((a) => (a.id === albumId ? { ...a, is_favorite: !value } : a))
+        );
+      }
     },
     []
   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { Search, ChevronDown } from "lucide-react";
-import type { Genre, Mood, SortKey } from "@/lib/types";
+import { Search, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import type { Genre, Mood, SortKey, SortDirection } from "@/lib/types";
 
 export interface FilterState {
   search: string;
@@ -11,6 +11,7 @@ export interface FilterState {
   stars: number | "unrated" | null;
   favoritesOnly: boolean;
   sort: SortKey;
+  sortDirection: SortDirection;
 }
 
 interface FilterBarProps {
@@ -171,23 +172,41 @@ export default function FilterBar({
           Favorites only
         </label>
 
-        {/* Sort */}
-        <div className="relative ml-auto">
-          <select
-            value={filters.sort}
-            onChange={(e) => onChange({ sort: e.target.value as SortKey })}
-            className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+        {/* Sort + direction toggle */}
+        <div className="flex items-center gap-1 ml-auto">
+          <div className="relative">
+            <select
+              value={filters.sort}
+              onChange={(e) => onChange({ sort: e.target.value as SortKey })}
+              className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  Sort: {o.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={14}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
+            />
+          </div>
+          {/* Sort direction toggle: click to flip asc/desc */}
+          <button
+            type="button"
+            onClick={() =>
+              onChange({ sortDirection: filters.sortDirection === "asc" ? "desc" : "asc" })
+            }
+            className="h-9 w-9 flex items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/60 hover:text-white/90 hover:bg-white/[0.08] transition-colors"
+            title={filters.sortDirection === "asc" ? "Ascending (click for descending)" : "Descending (click for ascending)"}
+            aria-label={`Sort ${filters.sortDirection === "asc" ? "ascending" : "descending"}`}
           >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                Sort: {o.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={14}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
-          />
+            {filters.sortDirection === "asc" ? (
+              <ArrowUp size={15} />
+            ) : (
+              <ArrowDown size={15} />
+            )}
+          </button>
         </div>
       </div>
     </div>
