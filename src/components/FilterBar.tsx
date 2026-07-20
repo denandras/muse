@@ -50,19 +50,21 @@ export default function FilterBar({
   genres,
   moods,
 }: FilterBarProps) {
-  // Flatten genre tree for dropdown display with indentation.
-  const flatGenres: { id: string; label: string; depth: number }[] = [];
-  const walk = (list: Genre[], depth: number, prefix: string) => {
+  // Flatten genre tree for dropdown display with hierarchy info.
+  // Items are in DFS order so the TriStateFilter can show/hide subtrees
+  // when a parent is collapsed.
+  const flatGenres: { id: string; label: string; depth: number; parentId: string | null; hasChildren: boolean }[] = [];
+  const walk = (list: Genre[], depth: number, parentId: string | null) => {
     list.forEach((g) => {
-      const label = prefix ? `${prefix} / ${g.name}` : g.name;
-      flatGenres.push({ id: g.id, label, depth });
-      if (g.children?.length) walk(g.children, depth + 1, label);
+      const hasChildren = !!g.children?.length;
+      flatGenres.push({ id: g.id, label: g.name, depth, parentId, hasChildren });
+      if (hasChildren) walk(g.children!, depth + 1, g.id);
     });
   };
-  walk(genres, 0, "");
+  walk(genres, 0, null);
 
   // Flatten moods (no hierarchy).
-  const flatMoods = moods.map((m) => ({ id: m.id, label: m.name, depth: 0 }));
+  const flatMoods = moods.map((m) => ({ id: m.id, label: m.name, depth: 0, parentId: null, hasChildren: false }));
 
   return (
     <div className="flex flex-wrap items-center gap-2 p-2 sm:p-3 rounded-2xl glass">

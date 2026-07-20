@@ -187,21 +187,51 @@ export default function LibraryPage() {
   }, [filters, view]);
 
   // Derive include/exclude sets from the tri-state genre filter.
+  // When a parent genre is included/excluded, all its descendants are
+  // automatically included/excluded too — selecting a parent filters by
+  // all children, per the tree-structure requirement.
+  const genreDescendantIds = useMemo(() => {
+    // Build a map from genre id → set of all descendant ids (not including self).
+    const descMap = new Map<string, Set<string>>();
+    const collect = (genre: Genre): Set<string> => {
+      const set = new Set<string>();
+      if (genre.children?.length) {
+        for (const child of genre.children) {
+          set.add(child.id);
+          for (const d of collect(child)) set.add(d);
+        }
+      }
+      descMap.set(genre.id, set);
+      return set;
+    };
+    genres.forEach(collect);
+    return descMap;
+  }, [genres]);
+
   const genreIncludeIds = useMemo(() => {
     const ids = new Set<string>();
     for (const [id, state] of Object.entries(filters.genreFilters)) {
-      if (state === "include") ids.add(id);
+      if (state === "include") {
+        ids.add(id);
+        // Add all descendant genres
+        const desc = genreDescendantIds.get(id);
+        if (desc) for (const d of desc) ids.add(d);
+      }
     }
     return ids.size > 0 ? ids : null;
-  }, [filters.genreFilters]);
+  }, [filters.genreFilters, genreDescendantIds]);
 
   const genreExcludeIds = useMemo(() => {
     const ids = new Set<string>();
     for (const [id, state] of Object.entries(filters.genreFilters)) {
-      if (state === "exclude") ids.add(id);
+      if (state === "exclude") {
+        ids.add(id);
+        const desc = genreDescendantIds.get(id);
+        if (desc) for (const d of desc) ids.add(d);
+      }
     }
     return ids.size > 0 ? ids : null;
-  }, [filters.genreFilters]);
+  }, [filters.genreFilters, genreDescendantIds]);
 
   // Same for moods.
   const moodIncludeIds = useMemo(() => {

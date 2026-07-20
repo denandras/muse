@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { ChevronDown, Plus, Minus, Check } from "lucide-react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { ChevronDown, Plus, Minus, ChevronRight } from "lucide-react";
 
 // Tri-state filter value for a single genre/mood item.
 // - null/absent = no filter (empty circle)
@@ -11,15 +11,17 @@ export type TriState = "include" | "exclude";
 
 export type TriStateMap = Record<string, TriState>;
 
-interface FlatItem {
+export interface FlatItem {
   id: string;
   label: string;
   depth: number;
+  parentId: string | null;
+  hasChildren: boolean;
 }
 
 interface TriStateFilterProps {
   label: string;            // "Genres" or "Moods"
-  items: FlatItem[];        // flattened, already indented by depth
+  items: FlatItem[];        // flattened tree in DFS order, with parent/child info
   values: TriStateMap;      // current state
   onChange: (next: TriStateMap) => void;
 }
@@ -38,6 +40,7 @@ export default function TriStateFilter({
   onChange,
 }: TriStateFilterProps) {
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -85,10 +88,37 @@ export default function TriStateFilter({
     onChange(newValues);
   };
 
+  const toggleCollapse = (id: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const clearAll = (e: React.MouseEvent) => {
     e.stopPropagation();
     onChange({});
   };
+
+  // Compute visible items: skip descendants of collapsed parents.
+  // Items are in DFS order, so we track a "skipDepth" — when a parent is
+  // collapsed, all subsequent items with depth > skipDepth are hidden until
+  // we return to the same or shallower depth.
+  const visibleItems = useMemo(() => {
+    const result: FlatItem[] = [];
+    let skipDepth = -1;
+    for (const item of items) {
+      if (skipDepth >= 0 && item.depth > skipDepth) continue; // inside collapsed branch
+      skipDepth = -1; // exited the collapsed branch
+      result.push(item);
+      if (item.hasChildren && collapsed.has(item.id)) {
+        skipDepth = item.depth;
+      }
+    }
+    return result;
+  }, [items, collapsed]);
 
   return (
     <div ref={containerRef} className="relative">
@@ -126,37 +156,58 @@ export default function TriStateFilter({
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute z-50 mt-1.5 left-0 min-w-[220px] max-w-[320px] max-h-[340px] overflow-y-auto rounded-xl border border-cream/10 bg-panel/95 backdrop-blur-xl shadow-2xl py-1.5">
+        <div className="absolute z-50 mt-1.5 left-0 min-w-[220px] max-w-[340px] max-h-[340px] overflow-y-auto rounded-xl border border-cream/10 bg-panel/95 backdrop-blur-xl shadow-2xl py-1.5">
           {items.length === 0 ? (
             <div className="px-3 py-2 text-xs text-cream/30">
               No {label.toLowerCase()} available
             </div>
           ) : (
-            items.map((item) => {
+            visibleItems.map((item) => {
               const state = values[item.id];
+              const isCollapsed = collapsed.has(item.id);
               return (
-                <button
+                <div
                   key={item.id}
-                  type="button"
-                  onClick={() => handleClick(item.id)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-cream/70 hover:bg-cream/[0.06] transition-colors cursor-pointer text-left"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-cream/70 hover:bg-cream/[0.06] transition-colors"
                   style={{ paddingLeft: `${12 + item.depth * 16}px` }}
                 >
-                  {/* Tri-state visual indicator */}
-                  <span
-                    className={`flex items-center justify-center w-4 h-4 rounded border transition-colors flex-shrink-0 ${
-                      state === "include"
-                        ? "bg-primary/80 border-primary-hover text-cream"
-                        : state === "exclude"
-                        ? "bg-secondary/80 border-secondary-hover text-cream"
-                        : "bg-transparent border-cream/20 text-transparent"
-                    }`}
+                  {/* Expand/collapse chevron (or spacer for leaf nodes) */}
+                  {item.hasChildren ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleCollapse(item.id)}
+                      className="flex items-center justify-center w-4 h-4 flex-shrink-0 text-cream/40 hover:text-cream/80 transition-colors"
+                      aria-label={isCollapsed ? "Expand" : "Collapse"}
+                    >
+                      <ChevronRight
+                        size={12}
+                        className={`transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+                      />
+                    </button>
+                  ) : (
+                    <span className="w-4 h-4 flex-shrink-0" />
+                  )}
+                  {/* Tri-state toggle button */}
+                  <button
+                    type="button"
+                    onClick={() => handleClick(item.id)}
+                    className="flex items-center gap-2 flex-1 min-w-0 text-left cursor-pointer"
                   >
-                    {state === "include" && <Plus size={10} strokeWidth={3} />}
-                    {state === "exclude" && <Minus size={10} strokeWidth={3} />}
-                  </span>
-                  <span className="truncate min-w-0">{item.label}</span>
-                </button>
+                    <span
+                      className={`flex items-center justify-center w-4 h-4 rounded border transition-colors flex-shrink-0 ${
+                        state === "include"
+                          ? "bg-primary/80 border-primary-hover text-cream"
+                          : state === "exclude"
+                          ? "bg-secondary/80 border-secondary-hover text-cream"
+                          : "bg-transparent border-cream/20 text-transparent"
+                      }`}
+                    >
+                      {state === "include" && <Plus size={10} strokeWidth={3} />}
+                      {state === "exclude" && <Minus size={10} strokeWidth={3} />}
+                    </span>
+                    <span className="truncate min-w-0">{item.label}</span>
+                  </button>
+                </div>
               );
             })
           )}
