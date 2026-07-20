@@ -161,36 +161,12 @@ export async function getCurrentUser(
       }
     }
 
-    // /v1/me failed (rate limited). Fall back to looking up the user
-    // by trying the access token against the existing users in Supabase.
-    // Since this is a single-user app, we can just grab the first user
-    // that has tokens that work. For now, just grab the first user.
-    const { data: fallbackUser } = await supabaseServer
-      .from('users')
-      .select('id, spotify_id, display_name, email, avatar_url, spotify_product, profile_public')
-      .limit(1)
-      .single()
-
-    if (fallbackUser) {
-      // Upgrade the pending cookie
-      const upgradeResponse = NextResponse.json({ ok: true })
-      upgradeResponse.cookies.delete('spotify_pending_profile')
-      upgradeResponse.cookies.set(USER_ID_COOKIE, fallbackUser.spotify_id, {
-        httpOnly: true,
-        secure: SECURE,
-        sameSite: 'lax',
-        maxAge: COOKIE_MAX_AGE,
-        path: '/',
-      })
-
-      return {
-        user: fallbackUser as unknown as User,
-        supabase: supabaseServer,
-        accessToken: accessToken ?? '',
-        refreshedResponse: upgradeResponse,
-      }
-    }
-
+    // /v1/me failed (rate limited, timeout, etc.).
+    // Do NOT fall back to grabbing a random user from the database —
+    // that would assign someone else's identity to this session.
+    // Return null; the caller will see "not authenticated" and the
+    // user can retry. The access/refresh token cookies are still set,
+    // so the next request will retry /v1/me automatically.
     return null
   }
 
