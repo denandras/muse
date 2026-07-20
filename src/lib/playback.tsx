@@ -41,6 +41,21 @@ interface PlaybackState {
     albumArt?: string | null
   ) => void;
   /**
+   * Play a track from a list at the given index. Populates the local play
+   * queue with all entries so next/previous can navigate the full list.
+   * Auto-advances at track end just like playAlbum.
+   */
+  playFromList: (
+    tracks: Array<{
+      id: string;
+      title?: string;
+      spotifyUri?: string | null;
+      artist?: string | null;
+      albumArt?: string | null;
+    }>,
+    startIndex?: number
+  ) => void;
+  /**
    * Play an album by queuing its tracks in order. Auto-advances to the next
    * track when the current one ends. Pass the ordered list of track entries.
    */
@@ -758,6 +773,90 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     [isPremium, spotifyReady, spotifyPlayTrack, initPlayer]
   );
 
+  const playFromList = useCallback(
+    (
+      tracks: Array<{
+        id: string;
+        title?: string;
+        spotifyUri?: string | null;
+        artist?: string | null;
+        albumArt?: string | null;
+      }>,
+      startIndex: number = 0
+    ) => {
+      const valid = tracks.filter((t) => t.spotifyUri);
+      if (valid.length === 0) {
+        console.warn("[Muse Playback] playFromList: no tracks with spotifyUri");
+        return;
+      }
+      const clampedIndex = Math.max(0, Math.min(startIndex, valid.length - 1));
+      const target = valid[clampedIndex];
+
+      if (!isPremium) {
+        console.warn("[Muse Playback] playFromList requires Spotify Premium");
+        return;
+      }
+
+      // Populate the queue with all entries
+      const entries: QueueEntry[] = valid.map((t) => ({
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        albumArt: t.albumArt,
+        spotifyUri: t.spotifyUri!,
+      }));
+      queueRef.current = entries;
+      queueIndexRef.current = clampedIndex;
+      setQueueLength(entries.length);
+      setQueueIndex(clampedIndex);
+      endedHandledRef.current = false;
+
+      if (!spotifyReady || !spotifyPlayerRef.current) {
+        console.warn("[Muse Playback] player not ready for playFromList — queuing + re-init");
+        pendingPlayRef.current = () => {
+          if (!spotifyDeviceIdRef.current) {
+            console.warn("[Muse Playback] pending playFromList: device still not ready");
+            return;
+          }
+          if (currentTrackIdRef.current !== target.id) {
+            setCurrentTrackId(target.id);
+            setCurrentTrackTitle(target.title ?? null);
+          }
+          setCurrentTrackArtist(target.artist ?? null);
+          setCurrentTrackAlbumArt(target.albumArt ?? null);
+          spotifyPlayTrack(target.spotifyUri!).catch((err) => {
+            console.error("[Muse Playback] pending playFromList error:", err);
+          });
+        };
+        fetch("/api/spotify/token")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (data?.access_token) {
+              spotifyTokenRef.current = data.access_token;
+              setSpotifyConnected(true);
+              setAuthError(false);
+              if (!spotifyPlayerRef.current) {
+                initPlayer();
+              }
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+
+      if (currentTrackIdRef.current !== target.id) {
+        setCurrentTrackId(target.id);
+        setCurrentTrackTitle(target.title ?? null);
+      }
+      setCurrentTrackArtist(target.artist ?? null);
+      setCurrentTrackAlbumArt(target.albumArt ?? null);
+      spotifyPlayTrack(target.spotifyUri!).catch((err) => {
+        console.error("[Muse Playback] playFromList error:", err);
+      });
+    },
+    [isPremium, spotifyReady, spotifyPlayTrack, initPlayer]
+  );
+
   const playAlbum = useCallback(
     (tracks: Array<{ id: string; title?: string; spotifyUri?: string | null; artist?: string | null; albumArt?: string | null }>) => {
       const valid = tracks.filter((t) => t.spotifyUri);
@@ -978,6 +1077,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     isPremium,
     authError,
     play,
+    playFromList,
     playAlbum,
     pause,
     resume,

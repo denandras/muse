@@ -214,6 +214,9 @@ export default function AlbumRow({
                       // pre-backfill rows where track_number is null.
                       displayNumber={t.track_number ?? i + 1}
                       showAlbumCover={false}
+                      // Pass all album tracks as the queue so next/previous
+                      // navigate within the album.
+                      queueTracks={tracks}
                       onRate={(s) => onRateTrack?.(t.id, s)}
                       onToggleFavorite={(v) =>
                         onToggleTrackFavorite?.(t.id, v)

@@ -58,6 +58,13 @@ interface TrackRowProps {
   readOnly?: boolean;
   /** Show the "In Liked Songs" badge. Default true; set false on the Liked page. */
   showLikedBadge?: boolean;
+  /**
+   * The list of tracks this row belongs to (e.g. all visible tracks on the
+   * current page, or all tracks in an album). When provided, clicking play
+   * uses playFromList to populate the full queue so next/previous navigate
+   * the entire list. When omitted, falls back to single-track play().
+   */
+  queueTracks?: Track[];
 }
 
 export default function TrackRow({
@@ -70,8 +77,9 @@ export default function TrackRow({
   indent = 0,
   readOnly = false,
   showLikedBadge = true,
+  queueTracks,
 }: TrackRowProps) {
-  const { play, pause, isPlaying, currentTrackId } = usePlayback();
+  const { play, playFromList, pause, isPlaying, currentTrackId } = usePlayback();
 
   const isCurrent = currentTrackId === track.id;
   const isPlayingThis = isCurrent && isPlaying;
@@ -80,6 +88,22 @@ export default function TrackRow({
     e.stopPropagation();
     if (isCurrent) {
       isPlaying ? pause() : play(track.id, track.title, track.spotify_uri, track.artist, track.album_cover_url);
+    } else if (queueTracks && queueTracks.length > 1) {
+      // Find this track's index in the queue and play from there —
+      // populates the full queue so next/previous navigate the list.
+      const idx = queueTracks.findIndex((t) => t.id === track.id);
+      playFromList(
+        queueTracks
+          .filter((t) => t.spotify_uri)
+          .map((t) => ({
+            id: t.id,
+            title: t.title,
+            spotifyUri: t.spotify_uri,
+            artist: t.artist,
+            albumArt: t.album_cover_url,
+          })),
+        Math.max(0, idx)
+      );
     } else {
       play(track.id, track.title, track.spotify_uri, track.artist, track.album_cover_url);
     }

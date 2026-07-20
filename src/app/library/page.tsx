@@ -789,6 +789,9 @@ export default function LibraryPage() {
                     // filter/sort change (handles reordering gracefully).
                     displayNumber={safeTrackPage * PAGE_SIZE + i + 1}
                     showLikedBadge={false}
+                    // Pass all visible tracks on this page as the queue so
+                    // next/previous navigate the page's track list.
+                    queueTracks={pagedTracks}
                     onRate={(s) => rateTrack(track.id, s)}
                     onToggleFavorite={(v) => toggleTrackFavorite(track.id, v)}
                     onOpenDetail={() => setEditingTrack(track)}
