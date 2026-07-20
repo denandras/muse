@@ -504,7 +504,7 @@ export default function TrackDetailModal({
                   <button
                     onClick={handleDelete}
                     disabled={deleting || saving}
-                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-rose-500/15 text-rose-200 border border-rose-500/30 text-sm hover:bg-rose-500/25 transition-colors disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-rose-500/15 text-rose-200 border border-rose-500/30 text-sm hover:bg-rose-500/25 transition-colors disabled:opacity-50 min-w-[90px]"
                   >
                     {deleting ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -523,7 +523,7 @@ export default function TrackDetailModal({
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-violet-500 text-white text-sm hover:bg-violet-400 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-violet-500 text-white text-sm hover:bg-violet-400 transition-colors disabled:opacity-50 min-w-[90px]"
                 >
                   {saving ? (
                     <Loader2 size={14} className="animate-spin" />

@@ -278,7 +278,7 @@ export default function SyncButton({
         <button
           onClick={runSync}
           disabled={running}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white/[0.06] text-white/80 text-sm hover:bg-white/[0.1] transition-colors disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-xl bg-white/[0.06] text-white/80 text-sm hover:bg-white/[0.1] transition-colors disabled:opacity-60 flex-shrink-0 min-w-[72px]"
           title="Import from Spotify"
         >
           {running ? (

@@ -640,10 +640,14 @@ export default function LibraryPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
-      {/* Header row: search + sync + view mode */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[140px] sm:min-w-[200px]">
+      {/* Header row: search + sync + view mode + play all.
+          Single row at all viewport widths — no flex-wrap. Search is the
+          only flexible element (flex-1 min-w-0); all sibling buttons keep
+          their natural width via flex-shrink-0. */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Search — the only flexible element. flex-1 + min-w-0 lets it
+            absorb available space and shrink on narrow screens. */}
+        <div className="relative flex-1 min-w-0">
           <Search
             size={16}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"

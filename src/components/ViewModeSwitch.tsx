@@ -18,7 +18,7 @@ export default function ViewModeSwitch({
   onChange: (mode: ViewMode) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-1 p-1 rounded-xl glass">
+    <div className="inline-flex items-center gap-1 p-1 rounded-xl glass flex-shrink-0">
       {MODES.map((mode) => {
         const active = value === mode.value;
         const Icon = mode.icon;
