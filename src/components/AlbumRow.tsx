@@ -41,11 +41,10 @@ export default function AlbumRow({
   const [expanded, setExpanded] = useState(false);
   const { play, playAlbum: playAlbumContext } = usePlayback();
 
-  // Singles (one-track albums) shouldn't be expandable — they're the
-  // same thing as their one track. album_type 'single' is the Spotify
-  // signal; also fallback to track count if album_type is missing.
-  const isSingle = album.album_type === "single" || (tracks.length <= 1 && !album.album_type);
-  const canExpand = !isSingle && tracks.length > 1;
+  // Expandable if there's more than one track, regardless of how
+  // Spotify labels the album (album_type "single" can still contain
+  // multiple tracks — e.g. a 2-part single).
+  const canExpand = tracks.length > 1;
 
   const playAlbum = (e: React.MouseEvent) => {
     e.stopPropagation();
