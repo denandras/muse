@@ -448,41 +448,39 @@ export default function AlbumDetailModal({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-2 p-5 border-t border-cream/[0.06]">
-              <div className="flex gap-2">
-                {onDelete && (
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleting || saving}
-                    className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-secondary/15 text-secondary-light border border-secondary/30 text-sm hover:bg-secondary/25 transition-colors disabled:opacity-50 min-w-[90px]"
-                  >
-                    {deleting ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Trash2 size={14} />
-                    )}
-                    {deleting ? "Deleting…" : "Delete"}
-                  </button>
-                )}
+            <div className="flex items-center gap-2 p-5 border-t border-cream/[0.06]">
+              {onDelete && (
                 <button
-                  onClick={() => !saving && onClose()}
-                  className="h-9 px-4 rounded-xl bg-cream/[0.06] text-cream/70 text-sm hover:bg-cream/[0.1] transition-colors"
+                  onClick={handleDelete}
+                  disabled={deleting || saving}
+                  className="inline-flex items-center justify-center gap-1.5 h-9 flex-1 sm:flex-none px-3 sm:px-4 rounded-xl bg-secondary/15 text-secondary-light border border-secondary/30 text-sm hover:bg-secondary/25 transition-colors disabled:opacity-50 whitespace-nowrap"
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-primary text-cream text-sm hover:bg-primary-hover transition-colors disabled:opacity-50 min-w-[90px]"
-                >
-                  {saving ? (
+                  {deleting ? (
                     <Loader2 size={14} className="animate-spin" />
                   ) : (
-                    <Save size={14} />
+                    <Trash2 size={14} />
                   )}
-                  {saving ? "Saving…" : "Save"}
+                  {deleting ? "Deleting…" : "Delete"}
                 </button>
-              </div>
+              )}
+              <button
+                onClick={() => !saving && onClose()}
+                className="h-9 flex-1 sm:flex-none px-3 sm:px-4 rounded-xl bg-cream/[0.06] text-cream/70 text-sm hover:bg-cream/[0.1] transition-colors whitespace-nowrap"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center justify-center gap-1.5 h-9 flex-1 sm:flex-none px-3 sm:px-4 rounded-xl bg-primary text-cream text-sm hover:bg-primary-hover transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {saving ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Save size={14} />
+                )}
+                {saving ? "Saving…" : "Save"}
+              </button>
             </div>
           </motion.div>
         </motion.div>
