@@ -448,10 +448,7 @@ export default function AlbumDetailModal({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between gap-2 p-5 border-t border-cream/[0.06]">
-              <span className="text-xs text-cream/30">
-                {dirty ? "Unsaved changes" : "All changes saved"}
-              </span>
+            <div className="flex items-center justify-end gap-2 p-5 border-t border-cream/[0.06]">
               <div className="flex gap-2">
                 {onDelete && (
                   <button
