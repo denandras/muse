@@ -547,13 +547,13 @@ export default function LibraryPage() {
     [tracks, albums, genres, moods]
   );
 
-  // Delete a track from the library — calls DELETE /api/tracks/[id] which
-  // also removes it from Spotify Liked Songs. On success, drop the track
-  // from state and refresh the cache.
+  // Remove a deleted track from local state + cache. The actual DELETE API
+  // call is made by the detail modal (TrackDetailModal.handleDelete), which
+  // only invokes this callback on res.ok. This function must NOT re-call the
+  // API — a second DELETE would 404 (already deleted) and the early return
+  // would prevent the state update, leaving the item stuck in the UI.
   const deleteTrack = useCallback(
-    async (trackId: string) => {
-      const res = await fetch(`/api/tracks/${trackId}`, { method: "DELETE" });
-      if (!res.ok) return;
+    (trackId: string) => {
       setTracks((prev) => {
         const next = prev.filter((t) => t.id !== trackId);
         writeCache({ ts: Date.now(), tracks: next, albums, genres, moods });
@@ -563,13 +563,11 @@ export default function LibraryPage() {
     [albums, genres, moods]
   );
 
-  // Delete an album from the library — calls DELETE /api/albums/[id] which
-  // also removes it from Spotify saved albums. On success, drop the album
-  // (and its tracks) from state and refresh the cache.
+  // Remove a deleted album from local state + cache. The actual DELETE API
+  // call is made by AlbumDetailModal.handleDelete, which only invokes this
+  // callback on res.ok. Same rationale as deleteTrack above.
   const deleteAlbum = useCallback(
-    async (albumId: string) => {
-      const res = await fetch(`/api/albums/${albumId}`, { method: "DELETE" });
-      if (!res.ok) return;
+    (albumId: string) => {
       setAlbums((prev) => {
         const next = prev.filter((a) => a.id !== albumId);
         writeCache({ ts: Date.now(), tracks, albums: next, genres, moods });
