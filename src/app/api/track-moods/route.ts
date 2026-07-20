@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, mergeRefreshedCookies } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   const auth = await getCurrentUser(request)
@@ -57,7 +57,9 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({ track_mood: data }, { status: 201 })
+  const response = NextResponse.json({ track_mood: data }, { status: 201 })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }
 
 export async function DELETE(request: NextRequest) {
@@ -102,5 +104,7 @@ export async function DELETE(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({ success: true })
+  const response = NextResponse.json({ success: true })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }

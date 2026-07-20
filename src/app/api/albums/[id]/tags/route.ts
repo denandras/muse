@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, mergeRefreshedCookies } from '@/lib/auth'
 
 // POST /api/albums/[id]/tags
 // Body: { genreIds: string[], moodIds: string[] }
@@ -137,7 +137,7 @@ export async function POST(
 
   await supabase.from('albums').update({ updated_at: new Date().toISOString() }).eq('id', id)
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     album_id: id,
     genreIds,
     moodIds,
@@ -146,4 +146,6 @@ export async function POST(
     addedMoods: toAddMoods.length,
     removedMoods: toRemoveMoods.length,
   })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }

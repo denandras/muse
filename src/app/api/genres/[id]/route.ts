@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, mergeRefreshedCookies } from '@/lib/auth'
 
 export async function PATCH(
   request: NextRequest,
@@ -101,7 +101,9 @@ export async function PATCH(
     return NextResponse.json({ error: 'Genre not found' }, { status: 404 })
   }
 
-  return NextResponse.json({ genre })
+  const response = NextResponse.json({ genre })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }
 
 export async function DELETE(
@@ -130,5 +132,7 @@ export async function DELETE(
     )
   }
 
-  return NextResponse.json({ success: true })
+  const response = NextResponse.json({ success: true })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }

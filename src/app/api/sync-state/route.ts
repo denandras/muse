@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, mergeRefreshedCookies } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   const auth = await getCurrentUser(request)
@@ -35,5 +35,7 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({ sync_state: syncState })
+  const response = NextResponse.json({ sync_state: syncState })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }

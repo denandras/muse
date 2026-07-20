@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser, getValidAccessToken } from "@/lib/auth";
+import { getCurrentUser, getValidAccessToken, mergeRefreshedCookies } from "@/lib/auth";
 import { importSavedAlbums, type ImportProgressEvent } from "@/lib/spotify-import";
 
 /**
@@ -59,5 +59,6 @@ export async function POST(request: NextRequest) {
       response.headers.append("set-cookie", cookie);
     }
   }
+  mergeRefreshedCookies(response, auth.refreshedResponse);
   return response;
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, mergeRefreshedCookies } from '@/lib/auth'
 
 const VALID_PLAY_COUNT_WINDOWS = ['all_time', 'this_year', '30d']
 const VALID_VIEW_MODES = ['albums', 'tracks', 'both']
@@ -36,7 +36,9 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({ settings })
+  const response = NextResponse.json({ settings })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }
 
 export async function PATCH(request: NextRequest) {
@@ -113,5 +115,7 @@ export async function PATCH(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({ settings })
+  const response = NextResponse.json({ settings })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, getValidAccessToken } from '@/lib/auth'
+import { getCurrentUser, getValidAccessToken, mergeRefreshedCookies } from '@/lib/auth'
 
 interface OrganizedTrack {
   id: string
@@ -106,5 +106,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({ removed: organizedTrackIds.size })
+  const response = NextResponse.json({ removed: organizedTrackIds.size })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }

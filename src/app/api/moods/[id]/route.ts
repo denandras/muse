@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, mergeRefreshedCookies } from '@/lib/auth'
 
 export async function PATCH(
   request: NextRequest,
@@ -56,7 +56,9 @@ export async function PATCH(
     return NextResponse.json({ error: 'Mood not found' }, { status: 404 })
   }
 
-  return NextResponse.json({ mood })
+  const response = NextResponse.json({ mood })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }
 
 export async function DELETE(
@@ -85,5 +87,7 @@ export async function DELETE(
     )
   }
 
-  return NextResponse.json({ success: true })
+  const response = NextResponse.json({ success: true })
+  mergeRefreshedCookies(response, auth.refreshedResponse)
+  return response
 }

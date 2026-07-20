@@ -3,12 +3,21 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { Music2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/useAuth";
+
+const SPOTIFY_ERROR_MESSAGES: Record<string, string> = {
+  token_exchange: "Failed to connect to Spotify. Please try signing in again.",
+  profile_fetch: "Could not retrieve your Spotify profile. Please try again.",
+  no_code: "Spotify did not return an authorization code. Please try again.",
+  state_mismatch: "Security check failed. Please try signing in again.",
+};
 
 export default function Home() {
   const router = useRouter();
   const { isAuthenticated, loading } = useAuth();
+  const searchParams = useSearchParams();
+  const spotifyError = searchParams.get("spotify_error");
 
   // Redirect to library if already authenticated
   useEffect(() => {
@@ -45,6 +54,13 @@ export default function Home() {
             ratings, and powerful filtering.
           </p>
         </div>
+
+        {spotifyError && (
+          <div className="w-full max-w-md rounded-2xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
+            {SPOTIFY_ERROR_MESSAGES[spotifyError] ??
+              "An unexpected error occurred during Spotify login."}
+          </div>
+        )}
 
         {loading ? (
           <div className="h-12 w-64 rounded-2xl glass animate-pulse" />
