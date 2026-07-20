@@ -18,6 +18,7 @@ import {
 import type { Album, Genre, Mood } from "@/lib/types";
 import StarRating from "./StarRating";
 import FavoriteToggle from "./FavoriteToggle";
+import { useScrollLock } from "@/lib/useScrollLock";
 
 interface AlbumDetailModalProps {
   album: Album | null;
@@ -58,6 +59,9 @@ export default function AlbumDetailModal({
   const [showGenrePicker, setShowGenrePicker] = useState(false);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [dirty, setDirty] = useState(false);
+
+  // Lock background scroll while the modal is open
+  useScrollLock(!!album);
 
   useEffect(() => {
     if (!album) return;

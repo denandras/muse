@@ -19,6 +19,7 @@ import {
 import type { Track, Genre, Mood } from "@/lib/types";
 import StarRating from "./StarRating";
 import FavoriteToggle from "./FavoriteToggle";
+import { useScrollLock } from "@/lib/useScrollLock";
 
 interface TrackDetailModalProps {
   track: Track | null;
@@ -73,6 +74,9 @@ export default function TrackDetailModal({
   const [showGenrePicker, setShowGenrePicker] = useState(false);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [dirty, setDirty] = useState(false);
+
+  // Lock background scroll while the modal is open
+  useScrollLock(!!track);
 
   // Sync form state when track changes
   useEffect(() => {
