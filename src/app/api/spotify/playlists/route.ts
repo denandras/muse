@@ -72,7 +72,19 @@ export async function GET(request: NextRequest) {
   }
 
   const data = (await res.json()) as PlaylistsPage;
-  const all = data.items ?? [];
+  // Guard against Spotify returning null items array or null fields
+  const rawItems = Array.isArray(data?.items) ? data.items : [];
+  const all = rawItems.map((pl) => ({
+    id: pl.id,
+    name: pl.name,
+    uri: pl.uri,
+    images: Array.isArray(pl?.images) ? pl.images : [],
+    owner: pl?.owner ?? null,
+    tracks: pl?.tracks ?? null,
+    public: pl?.public ?? false,
+    collaborative: pl?.collaborative ?? false,
+    description: pl?.description ?? null,
+  }));
 
   const response = NextResponse.json({
     playlists: all,
