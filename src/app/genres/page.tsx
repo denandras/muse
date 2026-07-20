@@ -230,7 +230,7 @@ function GenreModals({
   if (!modal) return null;
 
   const submit = async () => {
-    if (!name.trim()) return;
+    if (modal.kind !== "delete" && !name.trim()) return;
     setBusy(true);
     try {
       if (modal.kind === "create") {
