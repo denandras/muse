@@ -1,13 +1,15 @@
 "use client";
 
-import { Search, ChevronDown, ArrowUp, ArrowDown, X, Heart } from "lucide-react";
+import { ChevronDown, ArrowUp, ArrowDown, Heart } from "lucide-react";
 import type { Genre, Mood, SortKey, SortDirection } from "@/lib/types";
+import TriStateFilter, {
+  type TriStateMap,
+} from "./TriStateFilter";
 
 export interface FilterState {
   search: string;
-  genreId: string | null;
-  includeSubgenres: boolean;
-  moodId: string | null;
+  genreFilters: TriStateMap;
+  moodFilters: TriStateMap;
   stars: number | "unrated" | null;
   favoritesOnly: boolean;
   sort: SortKey;
@@ -59,79 +61,26 @@ export default function FilterBar({
   };
   walk(genres, 0, "");
 
+  // Flatten moods (no hierarchy).
+  const flatMoods = moods.map((m) => ({ id: m.id, label: m.name, depth: 0 }));
+
   return (
-    <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl glass">
-      {/* Search */}
-      <div className="relative flex-1 min-w-[200px]">
-        <Search
-          size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
-        />
-        <input
-          type="search"
-          value={filters.search}
-          onChange={(e) => onChange({ search: e.target.value })}
-          placeholder="Search…"
-          className="w-full h-9 pl-9 pr-9 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
-        />
-        {filters.search && (
-          <button
-            type="button"
-            onClick={() => onChange({ search: "" })}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
-            aria-label="Clear search"
-          >
-            <X size={15} />
-          </button>
-        )}
-      </div>
+    <div className="flex flex-wrap items-center gap-2 p-2 sm:p-3 rounded-2xl glass">
+      {/* Genre — custom tri-state dropdown */}
+      <TriStateFilter
+        label="Genres"
+        items={flatGenres}
+        values={filters.genreFilters}
+        onChange={(next) => onChange({ genreFilters: next })}
+      />
 
-      {/* Genre */}
-      <div className="relative">
-        <select
-          value={filters.genreId ?? ""}
-          onChange={(e) => onChange({ genreId: e.target.value || null })}
-          className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
-        >
-          <option value="">All genres</option>
-          {flatGenres.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-      </div>
-
-      {/* Include subgenres — only visible when a genre is selected */}
-      {filters.genreId && (
-        <label className="inline-flex items-center gap-1.5 text-xs text-white/50 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={filters.includeSubgenres}
-            onChange={(e) => onChange({ includeSubgenres: e.target.checked })}
-            className="w-3.5 h-3.5 rounded accent-violet-500"
-          />
-          Subgenres
-        </label>
-      )}
-
-      {/* Mood */}
-      <div className="relative">
-        <select
-          value={filters.moodId ?? ""}
-          onChange={(e) => onChange({ moodId: e.target.value || null })}
-          className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
-        >
-          <option value="">All moods</option>
-          {moods.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
-        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-      </div>
+      {/* Mood — custom tri-state dropdown */}
+      <TriStateFilter
+        label="Moods"
+        items={flatMoods}
+        values={filters.moodFilters}
+        onChange={(next) => onChange({ moodFilters: next })}
+      />
 
       {/* Stars */}
       <div className="relative">
@@ -169,7 +118,7 @@ export default function FilterBar({
       </button>
 
       {/* Sort + direction toggle */}
-      <div className="flex items-center gap-1 ml-auto">
+      <div className="flex items-center gap-1 sm:ml-auto">
         <div className="relative">
           <select
             value={filters.sort}

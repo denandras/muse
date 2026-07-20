@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Search, X, Play } from "lucide-react";
 import type { Album, Genre, Mood, Track, ViewMode } from "@/lib/types";
 import FilterBar, { type FilterState } from "@/components/FilterBar";
 import ViewModeSwitch from "@/components/ViewModeSwitch";
@@ -11,12 +11,13 @@ import AlbumRow from "@/components/AlbumRow";
 import SyncButton from "@/components/SyncButton";
 import TrackDetailModal from "@/components/TrackDetailModal";
 import AlbumDetailModal from "@/components/AlbumDetailModal";
+import { usePlayback } from "@/lib/playback";
 
 // --- sessionStorage cache for library data -------------------------------
 // Caching avoids refetching ~1700 tracks every time the user navigates
 // away and back. Data is shown instantly from cache; a background revalidate
 // runs only when the cache is older than STALE_MS.
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 5;
 const CACHE_KEY = `muse:library:v${CACHE_VERSION}`;
 const STALE_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -80,9 +81,8 @@ export default function LibraryPage() {
   const [view, setView] = useState<ViewMode>("both");
   const [filters, setFilters] = useState<FilterState>({
     search: "",
-    genreId: null,
-    includeSubgenres: false,
-    moodId: null,
+    genreFilters: {},
+    moodFilters: {},
     stars: null,
     favoritesOnly: false,
     sort: "added_at",
@@ -100,6 +100,8 @@ export default function LibraryPage() {
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
   // Album detail modal state
   const [editingAlbum, setEditingAlbum] = useState<Album | null>(null);
+
+  const { playAlbum: playAlbumContext } = usePlayback();
 
   // Fetch all library data from the API and write to cache + state.
   const fetchLibrary = useCallback(async (): Promise<boolean> => {
@@ -139,28 +141,28 @@ export default function LibraryPage() {
     }
   }, []);
 
-  // On mount: hydrate from cache instantly; refetch in the background only
-  // if the cache is missing or stale (stale-while-revalidate).
+  // On mount: hydrate from cache instantly; always refetch in background.
+  // We always do a background fetch (even with fresh cache) to recover from
+  // stale empty caches caused by previous auth failures.
   useEffect(() => {
     const cache = readCache();
-    if (cache) {
+    const hasCacheData = cache && (cache.tracks.length > 0 || cache.albums.length > 0);
+    if (hasCacheData) {
       setTracks(cache.tracks);
       setAlbums(cache.albums);
       setGenres(cache.genres);
       setMoods(cache.moods);
       setLoading(false);
       setHydrated(true);
-      if (Date.now() - cache.ts > STALE_MS) {
-        // Background revalidate — don't toggle loading, keep cached UI.
-        void fetchLibrary();
-      }
     } else {
+      // No cache or empty cache — show spinner until first fetch completes.
       setHydrated(true);
       setLoading(true);
-      void fetchLibrary().then((ok) => {
-        if (ok) setLoading(false);
-      });
     }
+    // Always refetch in background
+    void fetchLibrary().then((ok) => {
+      if (ok) setLoading(false);
+    });
   }, [fetchLibrary]);
 
   // Public reload used by the Sync button — forces a fresh fetch.
@@ -184,23 +186,39 @@ export default function LibraryPage() {
     setAlbumPage(0);
   }, [filters, view]);
 
-  // Collect descendant genre ids when "include subgenres" is on.
-  const expandedGenreIds = useMemo(() => {
-    if (!filters.genreId || !filters.includeSubgenres) return null;
-    const ids = new Set<string>([filters.genreId]);
-    let changed = true;
-    const flat = genres.flatMap((g) => [g, ...(g.children ?? [])]);
-    while (changed) {
-      changed = false;
-      flat.forEach((g) => {
-        if (g.parent_id && ids.has(g.parent_id) && !ids.has(g.id)) {
-          ids.add(g.id);
-          changed = true;
-        }
-      });
+  // Derive include/exclude sets from the tri-state genre filter.
+  const genreIncludeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [id, state] of Object.entries(filters.genreFilters)) {
+      if (state === "include") ids.add(id);
     }
-    return ids;
-  }, [filters.genreId, filters.includeSubgenres, genres]);
+    return ids.size > 0 ? ids : null;
+  }, [filters.genreFilters]);
+
+  const genreExcludeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [id, state] of Object.entries(filters.genreFilters)) {
+      if (state === "exclude") ids.add(id);
+    }
+    return ids.size > 0 ? ids : null;
+  }, [filters.genreFilters]);
+
+  // Same for moods.
+  const moodIncludeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [id, state] of Object.entries(filters.moodFilters)) {
+      if (state === "include") ids.add(id);
+    }
+    return ids.size > 0 ? ids : null;
+  }, [filters.moodFilters]);
+
+  const moodExcludeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [id, state] of Object.entries(filters.moodFilters)) {
+      if (state === "exclude") ids.add(id);
+    }
+    return ids.size > 0 ? ids : null;
+  }, [filters.moodFilters]);
 
   const showAlbums = view === "albums" || view === "both";
   const showTracks = view === "tracks" || view === "both";
@@ -216,15 +234,24 @@ export default function LibraryPage() {
           const hay = `${a.title} ${a.artist}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
-        if (filters.genreId) {
-          const ok =
-            expandedGenreIds
-              ? (a.genres ?? []).some((g) => expandedGenreIds.has(g.id))
-              : (a.genres ?? []).some((g) => g.id === filters.genreId);
-          if (!ok) return false;
+        // Genre tri-state filter
+        const aGenreIds = (a.genres ?? []).map((g) => g.id);
+        if (genreIncludeIds) {
+          // Must have at least one included genre
+          if (!aGenreIds.some((id) => genreIncludeIds.has(id))) return false;
         }
-        if (filters.moodId && !(a.moods ?? []).some((m) => m.id === filters.moodId))
-          return false;
+        if (genreExcludeIds) {
+          // Must NOT have any excluded genre
+          if (aGenreIds.some((id) => genreExcludeIds.has(id))) return false;
+        }
+        // Mood tri-state filter
+        const aMoodIds = (a.moods ?? []).map((m) => m.id);
+        if (moodIncludeIds) {
+          if (!aMoodIds.some((id) => moodIncludeIds.has(id))) return false;
+        }
+        if (moodExcludeIds) {
+          if (aMoodIds.some((id) => moodExcludeIds.has(id))) return false;
+        }
         if (filters.stars === "unrated") {
           if (a.stars !== null) return false;
         } else if (typeof filters.stars === "number") {
@@ -233,7 +260,7 @@ export default function LibraryPage() {
         return true;
       })
       .sort((a, b) => sortAlbums(a, b, filters.sort, filters.sortDirection));
-  }, [albums, filters, expandedGenreIds]);
+  }, [albums, filters, genreIncludeIds, genreExcludeIds, moodIncludeIds, moodExcludeIds]);
 
   // Filter tracks.
   // When showing both albums and tracks, hide tracks that belong to a
@@ -253,15 +280,22 @@ export default function LibraryPage() {
           const hay = `${t.title} ${t.artist} ${t.album_title ?? ""}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
-        if (filters.genreId) {
-          const ok =
-            expandedGenreIds
-              ? (t.genres ?? []).some((g) => expandedGenreIds.has(g.id))
-              : (t.genres ?? []).some((g) => g.id === filters.genreId);
-          if (!ok) return false;
+        // Genre tri-state filter
+        const tGenreIds = (t.genres ?? []).map((g) => g.id);
+        if (genreIncludeIds) {
+          if (!tGenreIds.some((id) => genreIncludeIds.has(id))) return false;
         }
-        if (filters.moodId && !(t.moods ?? []).some((m) => m.id === filters.moodId))
-          return false;
+        if (genreExcludeIds) {
+          if (tGenreIds.some((id) => genreExcludeIds.has(id))) return false;
+        }
+        // Mood tri-state filter
+        const tMoodIds = (t.moods ?? []).map((m) => m.id);
+        if (moodIncludeIds) {
+          if (!tMoodIds.some((id) => moodIncludeIds.has(id))) return false;
+        }
+        if (moodExcludeIds) {
+          if (tMoodIds.some((id) => moodExcludeIds.has(id))) return false;
+        }
         if (filters.stars === "unrated") {
           if (t.stars !== null) return false;
         } else if (typeof filters.stars === "number") {
@@ -270,7 +304,7 @@ export default function LibraryPage() {
         return true;
       })
       .sort((a, b) => sortTracks(a, b, filters.sort, filters.sortDirection));
-  }, [tracks, filters, expandedGenreIds, showAlbums, filteredAlbums]);
+  }, [tracks, filters, genreIncludeIds, genreExcludeIds, moodIncludeIds, moodExcludeIds, showAlbums, filteredAlbums]);
 
   // Paginate the filtered results. Only the current page slice is rendered,
   // which keeps filter toggles instant even with 1700+ items.
@@ -296,6 +330,8 @@ export default function LibraryPage() {
   );
 
   // Tracks grouped by album spotify id (for album expansion).
+  // Sorted by disc_number, then track_number so album tracks appear in
+  // their actual album order (not import/added_at order).
   const tracksByAlbum = useMemo(() => {
     const map = new Map<string, Track[]>();
     tracks.forEach((t) => {
@@ -303,6 +339,14 @@ export default function LibraryPage() {
       const arr = map.get(t.album_spotify_id) ?? [];
       arr.push(t);
       map.set(t.album_spotify_id, arr);
+    });
+    // Sort each album's tracks by disc_number, then track_number
+    map.forEach((arr) => {
+      arr.sort((a, b) => {
+        const discDiff = (a.disc_number ?? 0) - (b.disc_number ?? 0);
+        if (discDiff !== 0) return discDiff;
+        return (a.track_number ?? 0) - (b.track_number ?? 0);
+      });
     });
     return map;
   }, [tracks]);
@@ -389,6 +433,71 @@ export default function LibraryPage() {
     },
     [tracks, albums, genres, moods]
   );
+
+  // Delete a track from the library — calls DELETE /api/tracks/[id] which
+  // also removes it from Spotify Liked Songs. On success, drop the track
+  // from state and refresh the cache.
+  const deleteTrack = useCallback(
+    async (trackId: string) => {
+      const res = await fetch(`/api/tracks/${trackId}`, { method: "DELETE" });
+      if (!res.ok) return;
+      setTracks((prev) => {
+        const next = prev.filter((t) => t.id !== trackId);
+        writeCache({ ts: Date.now(), tracks: next, albums, genres, moods });
+        return next;
+      });
+    },
+    [albums, genres, moods]
+  );
+
+  // Delete an album from the library — calls DELETE /api/albums/[id] which
+  // also removes it from Spotify saved albums. On success, drop the album
+  // (and its tracks) from state and refresh the cache.
+  const deleteAlbum = useCallback(
+    async (albumId: string) => {
+      const res = await fetch(`/api/albums/${albumId}`, { method: "DELETE" });
+      if (!res.ok) return;
+      setAlbums((prev) => {
+        const next = prev.filter((a) => a.id !== albumId);
+        writeCache({ ts: Date.now(), tracks, albums: next, genres, moods });
+        return next;
+      });
+    },
+    [tracks, genres, moods]
+  );
+
+  // Play all currently visible items in seen order. Albums expand to
+  // their track list (in disc/track-number order), standalone tracks play
+  // as themselves. Builds a flat ordered list and hands it to the album
+  // context player so it auto-advances through everything.
+  const playAllVisible = useCallback(() => {
+    const list: Array<{ id: string; title?: string; spotifyUri?: string | null }> = [];
+    if (showAlbums) {
+      for (const album of pagedAlbums) {
+        const albumTracks = album.spotify_id
+          ? tracksByAlbum.get(album.spotify_id) ?? []
+          : album.tracks ?? [];
+        if (albumTracks.length > 0) {
+          for (const t of albumTracks) {
+            if (t.spotify_uri) {
+              list.push({ id: t.id, title: t.title, spotifyUri: t.spotify_uri });
+            }
+          }
+        } else if (album.spotify_uri) {
+          list.push({ id: album.id, title: album.title, spotifyUri: album.spotify_uri });
+        }
+      }
+    }
+    if (showTracks) {
+      for (const t of pagedTracks) {
+        if (t.spotify_uri) {
+          list.push({ id: t.id, title: t.title, spotifyUri: t.spotify_uri });
+        }
+      }
+    }
+    if (list.length === 0) return;
+    playAlbumContext(list);
+  }, [showAlbums, showTracks, pagedAlbums, pagedTracks, tracksByAlbum, playAlbumContext]);
 
   // Track detail modal save — PATCH track metadata, then sync tags.
   const handleTrackSave = useCallback(
@@ -510,8 +619,8 @@ export default function LibraryPage() {
   // but expose a clearCache helper for completeness).
   void clearCache;
 
-  // Show a spinner only on the very first load when we have no cached data.
-  if (loading && !hydrated) {
+  // Show a spinner only on the very first load when we have no data yet.
+  if (loading && tracks.length === 0 && albums.length === 0) {
     return (
       <div className="flex items-center justify-center p-12">
         <Loader2 className="animate-spin text-white/40" size={24} />
@@ -531,9 +640,45 @@ export default function LibraryPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-end gap-3">
+      {/* Header row: search + sync + view mode */}
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[140px] sm:min-w-[200px]">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
+          />
+          <input
+            type="search"
+            value={filters.search}
+            onChange={(e) => updateFilters({ search: e.target.value })}
+            placeholder="Search…"
+            className="w-full h-9 pl-9 pr-9 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
+          />
+          {filters.search && (
+            <button
+              type="button"
+              onClick={() => updateFilters({ search: "" })}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
+              aria-label="Clear search"
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
         <SyncButton onSyncComplete={loadLibrary} variant="header" />
         <ViewModeSwitch value={view} onChange={setView} />
+        <button
+          type="button"
+          onClick={playAllVisible}
+          disabled={pagedTracks.length === 0 && pagedAlbums.length === 0}
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-sm text-white/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+          aria-label="Play all visible"
+          title="Play all visible items in order"
+        >
+          <Play size={14} className="text-white/70" fill="currentColor" />
+          <span className="hidden sm:inline">Play all</span>
+        </button>
       </div>
 
       <FilterBar
@@ -637,13 +782,6 @@ export default function LibraryPage() {
                     onRate={(s) => rateTrack(track.id, s)}
                     onToggleFavorite={(v) => toggleTrackFavorite(track.id, v)}
                     onOpenDetail={() => setEditingTrack(track)}
-                    onRemoveFromLiked={() =>
-                      setTracks((prev) =>
-                        prev.map((t) =>
-                          t.id === track.id ? { ...t, is_liked: false } : t
-                        )
-                      )
-                    }
                   />
                 </motion.div>
               ))
@@ -674,6 +812,15 @@ export default function LibraryPage() {
           // re-render uses the new data; the parent setTracks above handles
           // the canonical state.
         }}
+        // Only allow deleting tracks the user individually saved (liked
+        // songs). Album tracks that aren't liked aren't individually saved
+        // in the library, so there's nothing to delete — removing the whole
+        // album is the way to drop them.
+        onDelete={
+          editingTrack?.is_liked
+            ? (trackId: string) => deleteTrack(trackId)
+            : undefined
+        }
       />
 
       {/* Album detail modal */}
@@ -683,6 +830,7 @@ export default function LibraryPage() {
         moods={moods}
         onClose={() => setEditingAlbum(null)}
         onSave={handleAlbumSave}
+        onDelete={(albumId: string) => deleteAlbum(albumId)}
       />
     </div>
   );

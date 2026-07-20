@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser, mergeRefreshedCookies } from "@/lib/auth";
+import { getCurrentUser, getValidAccessToken, refreshOn401, mergeRefreshedCookies } from "@/lib/auth";
 
 /**
  * GET /api/spotify/playlists
  * Lists the current user's Spotify playlists (owned + followed).
- * Paginates 50 at a time until all are collected.
+ * Fetches the first 50 playlists (one API call).
  */
 export async function GET(request: NextRequest) {
   const auth = await getCurrentUser(request);
@@ -12,7 +12,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { accessToken, refreshedResponse } = auth;
+  // Get a token — may be expired, we'll refresh on 401
+  const { token: accessToken, refreshedResponse: tokenRefreshResponse } =
+    await getValidAccessToken(request);
+  if (!accessToken) {
+    return NextResponse.json(
+      { error: "Spotify token expired — please reconnect" },
+      { status: 401 }
+    );
+  }
 
   interface SpotifyPlaylist {
     id: string;
@@ -33,32 +41,44 @@ export async function GET(request: NextRequest) {
     offset: number;
   }
 
-  const all: SpotifyPlaylist[] = [];
-  let offset = 0;
-  const limit = 50;
+  let activeToken = accessToken;
+  let refreshResponse = tokenRefreshResponse;
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const url = `https://api.spotify.com/v1/me/playlists?limit=${limit}&offset=${offset}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+  const fetchPlaylists = async (token: string) => {
+    const url = `https://api.spotify.com/v1/me/playlists?limit=50&offset=0`;
+    return fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
     });
+  };
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      return NextResponse.json(
-        { error: `Spotify API error ${res.status}`, detail: text.slice(0, 200) },
-        { status: res.status }
-      );
+  let res = await fetchPlaylists(activeToken);
+
+  // If 401, refresh the token and retry once
+  if (res.status === 401) {
+    const refreshed = await refreshOn401(request);
+    if (refreshed.token) {
+      activeToken = refreshed.token;
+      refreshResponse = refreshed.refreshedResponse;
+      res = await fetchPlaylists(activeToken);
     }
-
-    const data = (await res.json()) as PlaylistsPage;
-    all.push(...(data.items ?? []));
-    if (!data.next) break;
-    offset += limit;
   }
 
-  const response = NextResponse.json({ playlists: all, total: all.length });
-  mergeRefreshedCookies(response, refreshedResponse);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return NextResponse.json(
+      { error: `Spotify API error ${res.status}`, detail: text.slice(0, 200) },
+      { status: res.status }
+    );
+  }
+
+  const data = (await res.json()) as PlaylistsPage;
+  const all = data.items ?? [];
+
+  const response = NextResponse.json({
+    playlists: all,
+    total: data.total,
+    hasMore: !!data.next,
+  });
+  mergeRefreshedCookies(response, refreshResponse);
   return response;
 }

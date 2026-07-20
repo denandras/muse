@@ -8,39 +8,20 @@ import { useState, useEffect } from "react";
  * Global reconnect banner. Shows when the Spotify session has expired
  * (refresh token dead, or SDK fired authentication_error).
  *
- * Two triggers feed into this component:
- * 1. AppShell detects a 401 from /api/user → sets `sessionExpired=true`
- * 2. PlaybackProvider SDK fires authentication_error → sets `authError=true`
- *
- * When triggered by a 401, AppShell also auto-redirects to "/" after 4s.
- * The banner shows a countdown so the user knows what's happening.
  * The user can click "Reconnect" to go through OAuth immediately,
- * or dismiss the banner to stay on the (broken) page.
+ * or dismiss the banner to stay on the page.
  */
 export default function ReconnectBanner({
   show,
-  countdown,
 }: {
   show: boolean;
-  countdown?: number;
 }) {
   const [dismissed, setDismissed] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(countdown ?? 0);
 
   // If the flag flips back to false (e.g. user reconnected), reset dismissed
   if (!show && dismissed) {
     setDismissed(false);
   }
-
-  // Countdown timer
-  useEffect(() => {
-    if (!show || !countdown) return;
-    setSecondsLeft(countdown);
-    const timer = setInterval(() => {
-      setSecondsLeft((s) => Math.max(0, s - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [show, countdown]);
 
   const visible = show && !dismissed;
 
@@ -61,15 +42,9 @@ export default function ReconnectBanner({
                 <span className="text-sm text-amber-100/90">
                   Spotify session expired
                 </span>
-                {countdown ? (
-                  <span className="text-xs text-amber-200/50 ml-1.5">
-                    Redirecting to login… ({secondsLeft}s)
-                  </span>
-                ) : (
-                  <span className="text-xs text-amber-200/50 ml-1.5">
-                    Your token couldn&apos;t be refreshed.
-                  </span>
-                )}
+                <span className="text-xs text-amber-200/50 ml-1.5">
+                  Your token couldn&apos;t be refreshed.
+                </span>
               </div>
               <a
                 href="/api/spotify/auth"

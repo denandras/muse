@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Music2, Lock } from "lucide-react";
 import type { Metadata } from "next";
+import { supabaseServer } from "@/lib/supabase-server";
 
 interface ProfileData {
   user: {
@@ -15,14 +16,79 @@ interface ProfileData {
   totals: { tracks: number; albums: number };
 }
 
-async function fetchProfile(userId: string): Promise<ProfileData | null> {
+async function getProfileData(userId: string): Promise<ProfileData | null> {
   try {
-    const base = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-    const res = await fetch(`${base}/api/profile/${userId}`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as ProfileData;
+    // Look up the user by spotify_id (NOT the internal UUID)
+    const { data: user, error: userError } = await supabaseServer
+      .from("users")
+      .select("id, display_name, avatar_url, profile_public")
+      .eq("spotify_id", userId)
+      .single();
+
+    if (userError || !user) return null;
+    if (!user.profile_public) return null;
+
+    // Totals: tracks + albums
+    const [tracksCount, albumsCount] = await Promise.all([
+      supabaseServer
+        .from("tracks")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id),
+      supabaseServer
+        .from("albums")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id),
+    ]);
+
+    const totals = {
+      tracks: tracksCount.count ?? 0,
+      albums: albumsCount.count ?? 0,
+    };
+
+    // Genres with track counts via track_genres join
+    const { data: genresRows } = await supabaseServer
+      .from("genres")
+      .select("id, name, track_genres(track_id)")
+      .eq("user_id", user.id);
+
+    const genres = (genresRows ?? [])
+      .map((g: Record<string, unknown>) => ({
+        id: g.id as string,
+        name: g.name as string,
+        track_count:
+          (g.track_genres as Array<unknown> | null)?.length ?? 0,
+      }))
+      .filter((g) => g.track_count > 0)
+      .sort((a, b) => b.track_count - a.track_count);
+
+    // Moods with track counts via track_moods join
+    const { data: moodsRows } = await supabaseServer
+      .from("moods")
+      .select("id, name, color, track_moods(track_id)")
+      .eq("user_id", user.id);
+
+    const moods = (moodsRows ?? [])
+      .map((m: Record<string, unknown>) => ({
+        id: m.id as string,
+        name: m.name as string,
+        color: (m.color as string | null) ?? null,
+        track_count:
+          (m.track_moods as Array<unknown> | null)?.length ?? 0,
+      }))
+      .filter((m) => m.track_count > 0)
+      .sort((a, b) => b.track_count - a.track_count);
+
+    return {
+      user: {
+        id: user.id,
+        display_name: user.display_name,
+        avatar_url: user.avatar_url,
+        profile_public: user.profile_public,
+      },
+      genres,
+      moods,
+      totals,
+    };
   } catch {
     return null;
   }
@@ -34,7 +100,7 @@ export async function generateMetadata({
   params: Promise<{ userId: string }>;
 }): Promise<Metadata> {
   const { userId } = await params;
-  const data = await fetchProfile(userId);
+  const data = await getProfileData(userId);
   if (!data || !data.user.profile_public) {
     return { title: "Profile · Muse" };
   }
@@ -50,7 +116,7 @@ export default async function PublicProfilePage({
   params: Promise<{ userId: string }>;
 }) {
   const { userId } = await params;
-  const data = await fetchProfile(userId);
+  const data = await getProfileData(userId);
 
   if (!data || !data.user.profile_public) {
     return (

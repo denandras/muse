@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getValidAccessToken } from "@/lib/auth";
 import { importSavedAlbums, type ImportProgressEvent } from "@/lib/spotify-import";
 
 /**
@@ -12,7 +12,12 @@ export async function POST(request: NextRequest) {
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { supabase, accessToken, user, refreshedResponse } = auth;
+  const { supabase, user } = auth;
+
+  const { token: accessToken, refreshedResponse: tokenRefresh } = await getValidAccessToken(request);
+  if (!accessToken) {
+    return NextResponse.json({ error: "Spotify token expired" }, { status: 401 });
+  }
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -48,8 +53,8 @@ export async function POST(request: NextRequest) {
       "X-Accel-Buffering": "no",
     },
   });
-  if (refreshedResponse) {
-    const setCookies = refreshedResponse.headers.getSetCookie?.() ?? [];
+  if (tokenRefresh) {
+    const setCookies = tokenRefresh.headers.getSetCookie?.() ?? [];
     for (const cookie of setCookies) {
       response.headers.append("set-cookie", cookie);
     }

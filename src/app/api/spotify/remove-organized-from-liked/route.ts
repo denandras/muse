@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, getValidAccessToken } from '@/lib/auth'
 
 interface OrganizedTrack {
   id: string
@@ -11,8 +11,12 @@ export async function POST(request: NextRequest) {
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  const { supabase, user } = auth
 
-  const { supabase, accessToken, user } = auth
+  const { token: accessToken } = await getValidAccessToken(request)
+  if (!accessToken) {
+    return NextResponse.json({ error: 'Spotify token expired' }, { status: 401 })
+  }
 
   // Find liked tracks that have at least one genre OR one mood assigned.
   // We query tracks with is_liked=true and then filter by existence of

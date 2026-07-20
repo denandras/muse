@@ -14,6 +14,7 @@ import {
   Loader2,
   Plus,
   Check,
+  Trash2,
 } from "lucide-react";
 import type { Track, Genre, Mood } from "@/lib/types";
 import StarRating from "./StarRating";
@@ -36,6 +37,13 @@ interface TrackDetailModalProps {
     genreIds: string[];
     moodIds: string[];
   }) => Promise<void>;
+  /**
+   * Delete this track from the library (Spotify + DB). If absent, no delete
+   * button is shown. Only passed for tracks the user individually saved
+   * (liked songs) — album tracks that aren't liked cannot be deleted here
+   * because they aren't individually saved in the user's library.
+   */
+  onDelete?: (trackId: string) => void;
 }
 
 const MUSICAL_KEYS = [
@@ -49,6 +57,7 @@ export default function TrackDetailModal({
   moods,
   onClose,
   onSave,
+  onDelete,
 }: TrackDetailModalProps) {
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
@@ -60,6 +69,7 @@ export default function TrackDetailModal({
   const [selectedGenreIds, setSelectedGenreIds] = useState<Set<string>>(new Set());
   const [selectedMoodIds, setSelectedMoodIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showGenrePicker, setShowGenrePicker] = useState(false);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -120,9 +130,8 @@ export default function TrackDetailModal({
     try {
       await onSave({
         id: track.id,
-        title: title !== track.title ? title : undefined,
-        artist: artist !== track.artist ? artist : undefined,
-        album_title: albumTitle !== (track.album_title ?? "") ? albumTitle : undefined,
+        // title & artist are static — never send them in the update
+        // album_title is also static (not editable)
         musical_key: musicalKey !== (track.musical_key ?? "") ? musicalKey : undefined,
         notes: notes !== (track.notes ?? "") ? notes : undefined,
         stars: stars !== track.stars ? stars : undefined,
@@ -133,6 +142,33 @@ export default function TrackDetailModal({
       onClose();
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!track) return;
+    const trackLabel =
+      track.title && track.artist
+        ? `"${track.title}" by ${track.artist}`
+        : "this track";
+    if (
+      !window.confirm(
+        `Remove ${trackLabel} from your Liked Songs? This also removes it from your Muse library.`
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/tracks/${encodeURIComponent(track.id)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        onDelete?.(track.id);
+        onClose();
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -202,40 +238,30 @@ export default function TrackDetailModal({
 
             {/* Body */}
             <div className="flex flex-col gap-4 p-5">
-              {/* Title + Artist */}
+              {/* Title + Artist — static, not editable */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5">
                   <span className="text-xs text-white/50">Title</span>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => { setTitle(e.target.value); setDirty(true); }}
-                    className="h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 focus:outline-none focus:border-white/20 transition-colors"
-                  />
-                </label>
-                <label className="flex flex-col gap-1.5">
+                  <div className="h-10 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-sm text-white/90 flex items-center">
+                    {title || "—"}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
                   <span className="text-xs text-white/50">Artist</span>
-                  <input
-                    type="text"
-                    value={artist}
-                    onChange={(e) => { setArtist(e.target.value); setDirty(true); }}
-                    className="h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 focus:outline-none focus:border-white/20 transition-colors"
-                  />
-                </label>
+                  <div className="h-10 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-sm text-white/90 flex items-center">
+                    {artist || "—"}
+                  </div>
+                </div>
               </div>
 
               {/* Album + Musical Key */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5">
                   <span className="text-xs text-white/50">Album</span>
-                  <input
-                    type="text"
-                    value={albumTitle}
-                    onChange={(e) => { setAlbumTitle(e.target.value); setDirty(true); }}
-                    placeholder="—"
-                    className="h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
-                  />
-                </label>
+                  <div className="h-10 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-sm text-white/90 flex items-center">
+                    {albumTitle || "—"}
+                  </div>
+                </div>
                 <label className="flex flex-col gap-1.5">
                   <span className="text-xs text-white/50 flex items-center gap-1">
                     <KeyIcon size={11} /> Musical key
@@ -258,8 +284,15 @@ export default function TrackDetailModal({
                 </label>
               </div>
 
-              {/* Rating + Favorite */}
+              {/* Favorite (left) + Rating (right) */}
               <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-white/50">Favorite</span>
+                  <FavoriteToggle
+                    isFavorite={isFavorite}
+                    onChange={(v) => { setIsFavorite(v); setDirty(true); }}
+                  />
+                </div>
                 <div className="flex items-center gap-2">
                   <Star size={14} className="text-yellow-400/60" />
                   <span className="text-xs text-white/50">Rating</span>
@@ -272,13 +305,6 @@ export default function TrackDetailModal({
                       Clear
                     </button>
                   )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-white/50">Favorite</span>
-                  <FavoriteToggle
-                    isFavorite={isFavorite}
-                    onChange={(v) => { setIsFavorite(v); setDirty(true); }}
-                  />
                 </div>
               </div>
 
@@ -474,6 +500,20 @@ export default function TrackDetailModal({
                 {dirty ? "Unsaved changes" : "All changes saved"}
               </span>
               <div className="flex gap-2">
+                {onDelete && (
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting || saving}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-rose-500/15 text-rose-200 border border-rose-500/30 text-sm hover:bg-rose-500/25 transition-colors disabled:opacity-50"
+                  >
+                    {deleting ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                    {deleting ? "Deleting…" : "Delete"}
+                  </button>
+                )}
                 <button
                   onClick={() => !saving && onClose()}
                   className="h-9 px-4 rounded-xl bg-white/[0.06] text-white/70 text-sm hover:bg-white/[0.1] transition-colors"

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser, mergeRefreshedCookies } from "@/lib/auth";
+import { getCurrentUser, getValidAccessToken, refreshOn401, mergeRefreshedCookies } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase-server";
 
 /**
  * POST /api/spotify/import-playlist
  * Body: { playlist_id: string, genreIds?: string[], moodIds?: string[] }
  *
- * Fetches all tracks from the given Spotify playlist and upserts them
+ * Fetches tracks from the given Spotify playlist and upserts them
  * into the tracks table (is_liked=false). Optionally assigns the given
  * genre/mood IDs to every imported track.
  *
@@ -18,7 +18,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { supabase, user, accessToken, refreshedResponse } = auth;
+  const { supabase, user } = auth;
+
+  // Get a token — may be expired, we'll refresh on 401
+  let { token: accessToken, refreshedResponse: tokenRefreshResponse } =
+    await getValidAccessToken(request);
+  if (!accessToken) {
+    return NextResponse.json(
+      { error: "Spotify token expired — please reconnect" },
+      { status: 401 }
+    );
+  }
 
   let body: { playlist_id?: string; genreIds?: string[]; moodIds?: string[] };
   try {
@@ -57,49 +67,56 @@ export async function POST(request: NextRequest) {
     offset: number;
   }
 
-  // Fetch all tracks from the playlist (100/page)
+  // Fetch tracks from the playlist (100 per page, first page only
+  // to stay within Vercel's 10s Hobby timeout)
+  const fetchPage = async (token: string, offset: number) => {
+    const url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=${offset}&additional_types=track`;
+    return fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  };
+
   const trackRows: Array<Record<string, unknown>> = [];
-  let offset = 0;
-  const limit = 100;
   let total = 0;
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&additional_types=track`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+  let res = await fetchPage(accessToken, 0);
+
+  // If 401, refresh and retry once
+  if (res.status === 401) {
+    const refreshed = await refreshOn401(request);
+    if (refreshed.token) {
+      accessToken = refreshed.token;
+      tokenRefreshResponse = refreshed.refreshedResponse;
+      res = await fetchPage(accessToken, 0);
+    }
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return NextResponse.json(
+      { error: `Spotify API error ${res.status}`, detail: text.slice(0, 200) },
+      { status: res.status }
+    );
+  }
+
+  const data = (await res.json()) as PlaylistTracksPage;
+  total = data.total;
+  for (const item of data.items ?? []) {
+    if (!item.track) continue; // null tracks (e.g. local files)
+    const t = item.track;
+    trackRows.push({
+      user_id: user.id,
+      spotify_id: t.id,
+      spotify_uri: t.uri,
+      title: t.name,
+      artist: t.artists.map((a) => a.name).join(", "),
+      album_title: t.album?.name ?? null,
+      album_spotify_id: t.album?.id ?? null,
+      album_cover_url: t.album?.images?.[0]?.url ?? null,
+      duration_ms: t.duration_ms,
+      is_liked: false,
+      added_at: item.added_at,
     });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      return NextResponse.json(
-        { error: `Spotify API error ${res.status}`, detail: text.slice(0, 200) },
-        { status: res.status }
-      );
-    }
-
-    const data = (await res.json()) as PlaylistTracksPage;
-    total = data.total;
-    for (const item of data.items ?? []) {
-      if (!item.track) continue; // null tracks (e.g. local files)
-      const t = item.track;
-      trackRows.push({
-        user_id: user.id,
-        spotify_id: t.id,
-        spotify_uri: t.uri,
-        title: t.name,
-        artist: t.artists.map((a) => a.name).join(", "),
-        album_title: t.album?.name ?? null,
-        album_spotify_id: t.album?.id ?? null,
-        album_cover_url: t.album?.images?.[0]?.url ?? null,
-        duration_ms: t.duration_ms,
-        is_liked: false,
-        added_at: item.added_at,
-      });
-    }
-
-    if (!data.next) break;
-    offset += limit;
   }
 
   if (trackRows.length === 0) {
@@ -108,7 +125,7 @@ export async function POST(request: NextRequest) {
       total,
       skipped: 0,
     });
-    mergeRefreshedCookies(response, refreshedResponse);
+    mergeRefreshedCookies(response, tokenRefreshResponse);
     return response;
   }
 
@@ -210,6 +227,6 @@ export async function POST(request: NextRequest) {
       moods: moodIds.length,
     },
   });
-  mergeRefreshedCookies(response, refreshedResponse);
+  mergeRefreshedCookies(response, tokenRefreshResponse);
   return response;
 }

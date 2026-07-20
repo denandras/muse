@@ -111,10 +111,13 @@ export default function MiniPlayer() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="fixed bottom-0 left-0 right-0 z-50 p-3 pb-4 md:pb-3"
+          className="fixed left-0 right-0 z-40 p-3 pb-3
+                     bottom-16 md:bottom-0 md:pb-3"
         >
           <div className="mx-auto max-w-3xl">
-            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2.5 backdrop-blur-xl">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.05] backdrop-blur-xl px-3 py-2.5">
+              {/* Controls row */}
+              <div className="flex items-center gap-3">
               {/* Album art */}
               <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-white/[0.06]">
                 {currentTrackAlbumArt ? (
@@ -209,37 +212,38 @@ export default function MiniPlayer() {
                   aria-label="Volume"
                 />
               </div>
-            </div>
-
-            {/* Seek bar + time */}
-            <div className="mt-1 flex items-center gap-2 px-2">
-              <span className="text-[10px] tabular-nums text-white/40 w-9 text-right">
-                {formatTime(currentTime)}
-              </span>
-              <div
-                onClick={handleSeek}
-                className="group relative flex-1 h-1.5 cursor-pointer rounded-full bg-white/10"
-              >
-                <div
-                  className="absolute left-0 top-0 h-full rounded-full bg-white/70 transition-[width] duration-150 group-hover:bg-white"
-                  style={{ width: `${progress}%` }}
-                />
               </div>
-              <span className="text-[10px] tabular-nums text-white/40 w-9">
-                {formatTime(duration)}
-              </span>
-            </div>
 
-            {/* Non-Premium banner */}
-            {!isPremium && spotifyConnected && (
-              <div className="mt-2 flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200">
-                <Sparkles size={14} className="flex-shrink-0" />
-                <span>
-                  Spotify Premium is required for playback. You can still
-                  browse, organize, and manage your library.
+              {/* Seek bar + time (inside blurred container) */}
+              <div className="mt-2 flex items-center gap-2 px-1">
+                <span className="text-[10px] tabular-nums text-white/40 w-9 text-right">
+                  {formatTime(currentTime)}
+                </span>
+                <div
+                  onClick={handleSeek}
+                  className="group relative flex-1 h-1.5 cursor-pointer rounded-full bg-white/10"
+                >
+                  <div
+                    className="absolute left-0 top-0 h-full rounded-full bg-white/70 transition-[width] duration-150 group-hover:bg-white"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <span className="text-[10px] tabular-nums text-white/40 w-9">
+                  {formatTime(duration)}
                 </span>
               </div>
-            )}
+
+              {/* Non-Premium banner */}
+              {!isPremium && spotifyConnected && (
+                <div className="mt-2 flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200">
+                  <Sparkles size={14} className="flex-shrink-0" />
+                  <span>
+                    Spotify Premium is required for playback. You can still
+                    browse, organize, and manage your library.
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Toast */}
@@ -249,7 +253,7 @@ export default function MiniPlayer() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="fixed bottom-24 left-1/2 -translate-x-1/2 rounded-xl glass-strong px-4 py-2 text-sm text-white/90"
+                className="fixed bottom-36 md:bottom-24 left-1/2 -translate-x-1/2 rounded-xl glass-strong px-4 py-2 text-sm text-white/90"
               >
                 {toast}
               </motion.div>

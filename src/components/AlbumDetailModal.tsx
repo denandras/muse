@@ -13,6 +13,7 @@ import {
   Loader2,
   Plus,
   Check,
+  Trash2,
 } from "lucide-react";
 import type { Album, Genre, Mood } from "@/lib/types";
 import StarRating from "./StarRating";
@@ -33,6 +34,8 @@ interface AlbumDetailModalProps {
     genreIds: string[];
     moodIds: string[];
   }) => Promise<void>;
+  /** Delete this album from the library (Spotify + DB). If absent, no delete button shown. */
+  onDelete?: (albumId: string) => void;
 }
 
 export default function AlbumDetailModal({
@@ -41,6 +44,7 @@ export default function AlbumDetailModal({
   moods,
   onClose,
   onSave,
+  onDelete,
 }: AlbumDetailModalProps) {
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
@@ -50,6 +54,7 @@ export default function AlbumDetailModal({
   const [selectedGenreIds, setSelectedGenreIds] = useState<Set<string>>(new Set());
   const [selectedMoodIds, setSelectedMoodIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showGenrePicker, setShowGenrePicker] = useState(false);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -105,8 +110,7 @@ export default function AlbumDetailModal({
     try {
       await onSave({
         id: album.id,
-        title: title !== album.title ? title : undefined,
-        artist: artist !== album.artist ? artist : undefined,
+        // title & artist are static — never send them in the update
         notes: notes !== (album.notes ?? "") ? notes : undefined,
         stars: stars !== album.stars ? stars : undefined,
         is_favorite: isFavorite !== album.is_favorite ? isFavorite : undefined,
@@ -116,6 +120,33 @@ export default function AlbumDetailModal({
       onClose();
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!album) return;
+    const label =
+      album.title && album.artist
+        ? `"${album.title}" by ${album.artist}`
+        : "this album";
+    if (
+      !window.confirm(
+        `Delete ${label} from your library? This removes it from Spotify saved albums and your Muse library.`
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/albums/${encodeURIComponent(album.id)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        onDelete?.(album.id);
+        onClose();
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -188,25 +219,20 @@ export default function AlbumDetailModal({
 
             {/* Body */}
             <div className="flex flex-col gap-4 p-5">
+              {/* Title + Artist — static, not editable */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5">
                   <span className="text-xs text-white/50">Title</span>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => { setTitle(e.target.value); setDirty(true); }}
-                    className="h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 focus:outline-none focus:border-white/20 transition-colors"
-                  />
-                </label>
-                <label className="flex flex-col gap-1.5">
+                  <div className="h-10 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-sm text-white/90 flex items-center">
+                    {title || "—"}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
                   <span className="text-xs text-white/50">Artist</span>
-                  <input
-                    type="text"
-                    value={artist}
-                    onChange={(e) => { setArtist(e.target.value); setDirty(true); }}
-                    className="h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 focus:outline-none focus:border-white/20 transition-colors"
-                  />
-                </label>
+                  <div className="h-10 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-sm text-white/90 flex items-center">
+                    {artist || "—"}
+                  </div>
+                </div>
               </div>
 
               {/* Rating + Favorite */}
@@ -423,6 +449,20 @@ export default function AlbumDetailModal({
                 {dirty ? "Unsaved changes" : "All changes saved"}
               </span>
               <div className="flex gap-2">
+                {onDelete && (
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting || saving}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-rose-500/15 text-rose-200 border border-rose-500/30 text-sm hover:bg-rose-500/25 transition-colors disabled:opacity-50"
+                  >
+                    {deleting ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                    {deleting ? "Deleting…" : "Delete"}
+                  </button>
+                )}
                 <button
                   onClick={() => !saving && onClose()}
                   className="h-9 px-4 rounded-xl bg-white/[0.06] text-white/70 text-sm hover:bg-white/[0.1] transition-colors"

@@ -16,12 +16,10 @@ import type { Genre } from "@/lib/types";
 export default function GenresPage() {
   const [genres, setGenres] = useState<Genre[]>([]);
   const [loading, setLoading] = useState(true);
-  const [includeSubgenres, setIncludeSubgenres] = useState(false);
-  const [filterId, setFilterId] = useState<string | null>(null);
 
   // Modal state
   const [modal, setModal] = useState<
-    | { kind: "create" }
+    | { kind: "create"; parentId?: string }
     | { kind: "rename"; genre: Genre }
     | { kind: "delete"; genre: Genre }
     | null
@@ -41,60 +39,18 @@ export default function GenresPage() {
   // Build tree from flat list.
   const tree = buildTree(genres);
 
-  // Visible ids when filtering (with optional subgenre expansion).
-  const visibleIds = (() => {
-    if (!filterId) return null;
-    const ids = new Set<string>([filterId]);
-    if (includeSubgenres) {
-      let changed = true;
-      while (changed) {
-        changed = false;
-        genres.forEach((g) => {
-          if (g.parent_id && ids.has(g.parent_id) && !ids.has(g.id)) {
-            ids.add(g.id);
-            changed = true;
-          }
-        });
-      }
-    }
-    return ids;
-  })();
-
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
-      <div className="flex items-center justify-end gap-3">
+      {/* Header: title + plus icon */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-medium text-white/90">Genres</h1>
         <button
           onClick={() => setModal({ kind: "create" })}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-violet-500/20 text-violet-200 border border-violet-500/30 text-sm hover:bg-violet-500/30 transition-colors"
+          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/[0.06] text-white/70 hover:bg-white/[0.12] transition-colors"
+          title="New genre"
         >
-          <Plus size={14} />
-          New genre
+          <Plus size={18} />
         </button>
-      </div>
-
-      {/* Filter controls */}
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <select
-          value={filterId ?? ""}
-          onChange={(e) => setFilterId(e.target.value || null)}
-          className="h-8 px-2 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/70 text-xs"
-        >
-          <option value="">All genres</option>
-          {flatten(tree).map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.label}
-            </option>
-          ))}
-        </select>
-        <label className="inline-flex items-center gap-1.5 text-white/40 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={includeSubgenres}
-            onChange={(e) => setIncludeSubgenres(e.target.checked)}
-            className="w-3.5 h-3.5 accent-violet-500"
-          />
-          Include subgenres
-        </label>
       </div>
 
       {loading ? (
@@ -103,7 +59,7 @@ export default function GenresPage() {
         </div>
       ) : genres.length === 0 ? (
         <div className="text-center py-16 text-sm text-white/30 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-          No genres yet. Create your first genre to start organizing.
+          No genres yet. Click + to create your first genre.
         </div>
       ) : (
         <div className="rounded-2xl glass p-3 flex flex-col gap-1">
@@ -112,10 +68,9 @@ export default function GenresPage() {
               key={g.id}
               genre={g}
               depth={0}
-              visibleIds={visibleIds}
               onRename={(genre) => setModal({ kind: "rename", genre })}
               onDelete={(genre) => setModal({ kind: "delete", genre })}
-              onCreateChild={() => setModal({ kind: "create" })}
+              onCreateChild={(parentId) => setModal({ kind: "create", parentId })}
             />
           ))}
         </div>
@@ -153,22 +108,19 @@ export default function GenresPage() {
 interface TreeItemProps {
   genre: Genre;
   depth: number;
-  visibleIds: Set<string> | null;
   onRename: (g: Genre) => void;
   onDelete: (g: Genre) => void;
-  onCreateChild: () => void;
+  onCreateChild: (parentId: string) => void;
 }
 
 function GenreTreeItem({
   genre,
   depth,
-  visibleIds,
   onRename,
   onDelete,
   onCreateChild,
 }: TreeItemProps) {
   const [open, setOpen] = useState(true);
-  if (visibleIds && !visibleIds.has(genre.id)) return null;
   const hasChildren = (genre.children?.length ?? 0) > 0;
   return (
     <div>
@@ -197,24 +149,24 @@ function GenreTreeItem({
             {genre.track_count} tracks
           </span>
         )}
-        <div className="flex items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 opacity-60 sm:opacity-40 sm:hover:opacity-100 transition-opacity">
           <button
-            onClick={onCreateChild}
-            className="w-7 h-7 rounded-md hover:bg-white/10 text-white/40 hover:text-white/80 flex items-center justify-center"
+            onClick={() => onCreateChild(genre.id)}
+            className="w-7 h-7 rounded-md hover:bg-white/10 text-white/50 hover:text-white/90 flex items-center justify-center transition-colors"
             title="Add child"
           >
             <Plus size={13} />
           </button>
           <button
             onClick={() => onRename(genre)}
-            className="w-7 h-7 rounded-md hover:bg-white/10 text-white/40 hover:text-white/80 flex items-center justify-center"
+            className="w-7 h-7 rounded-md hover:bg-white/10 text-white/50 hover:text-white/90 flex items-center justify-center transition-colors"
             title="Rename"
           >
             <Pencil size={13} />
           </button>
           <button
             onClick={() => onDelete(genre)}
-            className="w-7 h-7 rounded-md hover:bg-rose-500/15 text-white/40 hover:text-rose-300 flex items-center justify-center"
+            className="w-7 h-7 rounded-md hover:bg-rose-500/15 text-white/50 hover:text-rose-300 flex items-center justify-center transition-colors"
             title="Delete"
           >
             <Trash2 size={13} />
@@ -235,7 +187,6 @@ function GenreTreeItem({
                 key={child.id}
                 genre={child}
                 depth={depth + 1}
-                visibleIds={visibleIds}
                 onRename={onRename}
                 onDelete={onDelete}
                 onCreateChild={onCreateChild}
@@ -257,7 +208,7 @@ function GenreModals({
   onDelete,
 }: {
   modal:
-    | { kind: "create" }
+    | { kind: "create"; parentId?: string }
     | { kind: "rename"; genre: Genre }
     | { kind: "delete"; genre: Genre }
     | null;
@@ -273,7 +224,7 @@ function GenreModals({
 
   useEffect(() => {
     setName(modal?.kind === "rename" ? modal.genre.name : "");
-    setParentId(null);
+    setParentId(modal?.kind === "create" ? (modal.parentId ?? null) : null);
   }, [modal]);
 
   if (!modal) return null;
@@ -406,7 +357,6 @@ function buildTree(flat: Genre[]): Genre[] {
       roots.push(g);
     }
   });
-  // Sort by sort_order then name.
   const sortRec = (list: Genre[]) => {
     list.sort(
       (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, getValidAccessToken } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   const auth = await getCurrentUser(request)
@@ -7,7 +7,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { accessToken } = auth
+  const { token: accessToken } = await getValidAccessToken(request)
+  if (!accessToken) {
+    return NextResponse.json({ error: 'Spotify token expired' }, { status: 401 })
+  }
   const searchParams = request.nextUrl.searchParams
   const q = searchParams.get('q')
   const type = searchParams.get('type') ?? 'tracks,albums'

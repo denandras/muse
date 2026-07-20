@@ -27,6 +27,10 @@ interface ImportResult {
   albumsIncrementalStop: boolean;
   likedTracksTotal: number;
   albumsTotal: number;
+  /** When >0, more album pages remain — send albumOffset=N in the next batch. */
+  albumNextOffset: number;
+  /** True if all album pages were scanned. */
+  albumsComplete: boolean;
 }
 
 interface ProgressState {
@@ -71,9 +75,10 @@ export default function SyncButton({
      * /api/sync/import with the appropriate query param, streaming NDJSON
      * progress, and returning the ImportResult for that phase.
      *
-     * We split the two phases into separate HTTP requests so each gets
-     * its own Vercel function timeout budget (60s on Hobby). The server
-     * route already supports ?likedOnly and ?albumsOnly.
+     * For albums, the client sends albumOffset + albumMaxPages so the server
+     * processes a bounded batch (not all albums at once). This prevents 524
+     * server timeouts on large libraries (1000+ albums). If the server
+     * returns albumNextOffset > 0, the caller sends a follow-up request.
      */
     const runPhase = async (
       phase: "liked" | "albums",
@@ -85,7 +90,20 @@ export default function SyncButton({
       });
       if (!res.ok || !res.body) {
         const text = await res.text().catch(() => "");
-        setError(`Sync (${phase}) failed (${res.status}): ${text.slice(0, 120)}`);
+        // Vercel/Cloudflare return full HTML error pages (524 timeout, etc).
+        // Strip HTML tags and trim to a short, actionable message.
+        const clean = text
+          .replace(/<[^>]*>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 80);
+        const reason =
+          res.status === 524
+            ? "server timeout (batch too large — will retry in smaller chunks)"
+            : res.status === 429
+            ? "Spotify rate limit — try again in a minute"
+            : clean || res.statusText;
+        setError(`Sync (${phase}) failed (${res.status}): ${reason}`);
         return null;
       }
 
@@ -114,9 +132,10 @@ export default function SyncButton({
           } else if (obj.result) {
             phaseResult = obj.result as ImportResult;
           } else if (obj.phase === "done") {
-            // Server signals phase finished — don't show "Sync complete"
-            // here because another phase may follow. Just let the stream
-            // close naturally.
+            // Server signals phase finished — clear the progress label
+            // so stale text doesn't persist between phases or after completion.
+            setProgressLabel(null);
+            setProgress(null);
           } else if (obj.label) {
             setProgressLabel(String(obj.label));
             const processed = typeof obj.processed === "number" ? obj.processed : 0;
@@ -129,15 +148,85 @@ export default function SyncButton({
       return phaseResult;
     };
 
+    /**
+     * Runs the album sync in bounded batches. Each batch processes
+     * ALBUM_BATCH_PAGES pages (50 albums per page) so each request stays well
+     * within Vercel's 300s function timeout. If a batch fails (524, network
+     * error), it is retried up to MAX_BATCH_RETRIES times with exponential
+     * backoff. Already-synced batches are not re-processed because the
+     * server tracks progress via albumStartOffset and only fetches new
+     * albums (existing ones are skipped cheaply).
+     */
+    const ALBUM_BATCH_PAGES = 4; // 4 pages × 50 = 200 albums per batch
+    const MAX_BATCH_RETRIES = 3;
+    const runAlbumBatches = async (): Promise<ImportResult | null> => {
+      let albumOffset = 0;
+      let merged: ImportResult | null = null;
+      let batchNum = 0;
+
+      while (true) {
+        batchNum++;
+        let batchResult: ImportResult | null = null;
+        let batchError: Error | null = null;
+
+        // Retry loop for this batch
+        for (let attempt = 0; attempt <= MAX_BATCH_RETRIES; attempt++) {
+          if (attempt > 0) {
+            const backoffMs = Math.min(2000 * 2 ** (attempt - 1), 16000);
+            setProgressLabel(
+              `Retrying album batch ${batchNum} (attempt ${attempt + 1})…`
+            );
+            await new Promise((r) => setTimeout(r, backoffMs));
+          }
+
+          const query = `albumsOnly=true&albumOffset=${albumOffset}&albumMaxPages=${ALBUM_BATCH_PAGES}`;
+          batchResult = await runPhase("albums", query);
+
+          if (batchResult) {
+            batchError = null;
+            break; // success
+          }
+          // runPhase already set the error message; record for retry logic
+          batchError = new Error("Batch failed");
+        }
+
+        if (batchError || !batchResult) {
+          // All retries exhausted — stop the sync with the error already set
+          return merged;
+        }
+
+        // Merge this batch's result into the running total
+        if (!merged) {
+          merged = { ...batchResult };
+        } else {
+          merged.albumsImported += batchResult.albumsImported;
+          merged.albumTracksImported += batchResult.albumTracksImported;
+          merged.albumsTotal = batchResult.albumsTotal;
+          merged.albumsIncrementalStop = batchResult.albumsIncrementalStop;
+          merged.albumNextOffset = batchResult.albumNextOffset;
+          merged.albumsComplete = batchResult.albumsComplete;
+        }
+
+        // Check if there are more batches to process
+        if (!batchResult.albumNextOffset || batchResult.albumNextOffset <= 0) {
+          break; // all albums synced
+        }
+        albumOffset = batchResult.albumNextOffset;
+        // Continue to next batch
+      }
+
+      return merged;
+    };
+
     try {
-      // Phase 1: liked songs (its own 60s budget)
+      // Phase 1: liked songs (its own timeout budget)
       const likedResult = await runPhase("liked", "likedOnly=true");
       // Show transition label so the progress bar doesn't disappear
       // between the two HTTP requests (which look like a page refresh).
       setProgressLabel("Liked songs done — starting albums…");
       setProgress((prev) => prev ? { ...prev, phase: "albums", label: "Starting album sync…" } : prev);
-      // Phase 2: saved albums + album tracks (its own 60s budget)
-      const albumsResult = await runPhase("albums", "albumsOnly=true");
+      // Phase 2: saved albums in bounded batches (prevents 524 timeout)
+      const albumsResult = await runAlbumBatches();
 
       // Merge the two phase results into one ImportResult for the toast.
       if (likedResult || albumsResult) {
@@ -149,6 +238,8 @@ export default function SyncButton({
           albumsIncrementalStop: albumsResult?.albumsIncrementalStop ?? false,
           likedTracksTotal: likedResult?.likedTracksTotal ?? 0,
           albumsTotal: albumsResult?.albumsTotal ?? 0,
+          albumNextOffset: albumsResult?.albumNextOffset ?? 0,
+          albumsComplete: albumsResult?.albumsComplete ?? true,
         };
         setResult(merged);
         setProgressLabel(null);
@@ -163,6 +254,8 @@ export default function SyncButton({
       }
     } finally {
       setRunning(false);
+      setProgressLabel(null);
+      setProgress(null);
       abortRef.current = null;
     }
   }, [onSyncComplete]);
@@ -331,11 +424,11 @@ function SyncToast({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
-        className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl glass-strong px-4 py-2.5 text-sm text-rose-300 flex items-center gap-2 max-w-md"
+        className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl glass-strong px-4 py-3 text-sm text-rose-300 flex items-start gap-2 max-w-sm"
       >
-        <AlertCircle size={16} />
-        <span className="truncate">{error}</span>
-        <button onClick={onDismiss} className="ml-2 text-white/40 hover:text-white/80">
+        <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+        <span className="flex-1 min-w-0">{error}</span>
+        <button onClick={onDismiss} className="flex-shrink-0 text-white/40 hover:text-white/80 mt-0.5">
           <X size={14} />
         </button>
       </motion.div>

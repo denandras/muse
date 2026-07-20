@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase-server";
+import { COOKIE_NAMES, SECURE, COOKIE_MAX_AGE } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const error = searchParams.get("error");
 
+  // Use forwarded host for correct redirect URL on Vercel
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
+  const origin = forwardedHost
+    ? `${forwardedProto}://${forwardedHost}`
+    : new URL(request.url).origin;
+
   if (error) {
-    return NextResponse.redirect(new URL(`/?spotify_error=${error}`, request.url));
+    return NextResponse.redirect(new URL(`/?spotify_error=${error}`, origin));
   }
   if (!code) {
-    return NextResponse.redirect(new URL("/?spotify_error=no_code", request.url));
+    return NextResponse.redirect(new URL("/?spotify_error=no_code", origin));
   }
 
   const clientId = process.env.SPOTIFY_CLIENT_ID!;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET!;
-  // Must match the URI used in /api/spotify/auth for Spotify to accept the exchange
   const redirectUri =
     process.env.NODE_ENV === "production"
       ? process.env.SPOTIFY_REDIRECT_URI_PROD!
@@ -38,7 +44,7 @@ export async function GET(request: NextRequest) {
   if (!tokenRes.ok) {
     const text = await tokenRes.text();
     console.error("[spotify/callback] Token exchange failed:", tokenRes.status, text);
-    return NextResponse.redirect(new URL("/?spotify_error=token_exchange", request.url));
+    return NextResponse.redirect(new URL("/?spotify_error=token_exchange", origin));
   }
 
   const tokens = await tokenRes.json();
@@ -46,88 +52,68 @@ export async function GET(request: NextRequest) {
   const refreshToken: string = tokens.refresh_token;
 
   if (!accessToken || !refreshToken) {
-    console.error("[spotify/callback] Missing token in exchange response:", JSON.stringify(Object.keys(tokens)));
-    return NextResponse.redirect(new URL("/?spotify_error=token_exchange", request.url));
+    console.error("[spotify/callback] Missing token in exchange response");
+    return NextResponse.redirect(new URL("/?spotify_error=token_exchange", origin));
   }
 
-  // ── Fetch Spotify user profile ────────────────────────────────────────────
-  const meRes = await fetch("https://api.spotify.com/v1/me", {
-    headers: { Authorization: `Bearer ${accessToken}` },
+  // ── Set cookies and redirect immediately ───────────────────────────────────
+  // NO /v1/me call here — that was causing timeouts on Vercel Hobby (10s limit).
+  // The profile fetch and Supabase upsert happen lazily in getCurrentUser
+  // when the session is checked on /library.
+  const response = NextResponse.redirect(new URL("/library", origin));
+
+  // Set the pending profile cookie — tells getCurrentUser to fetch /v1/me
+  // on the first session check and create the user row + spotify_user_id cookie.
+  response.cookies.set("spotify_pending_profile", "1", {
+    httpOnly: true,
+    secure: SECURE,
+    sameSite: "lax",
+    maxAge: 300, // 5 min
+    path: "/",
   });
 
-  if (!meRes.ok) {
-    const meText = await meRes.text().catch(() => "");
-    console.error("[spotify/callback] /v1/me failed:", meRes.status, meText);
-    console.error("[spotify/callback] access_token length:", accessToken?.length ?? 0, "starts with:", accessToken?.slice(0, 10));
-    return NextResponse.redirect(new URL(`/?spotify_error=profile_fetch&status=${meRes.status}`, request.url));
-  }
+  response.cookies.set(COOKIE_NAMES.ACCESS_TOKEN, accessToken, {
+    httpOnly: true,
+    secure: SECURE,
+    sameSite: "lax",
+    maxAge: tokens.expires_in ?? 3600,
+    path: "/",
+  });
 
-  const profile = await meRes.json();
-  const spotifyId: string = profile.id;
-  const displayName: string | null = profile.display_name ?? null;
-  const email: string | null = profile.email ?? null;
-  const avatarUrl: string | null = profile.images?.[0]?.url ?? null;
-  const spotifyProduct: string | null = profile.product ?? null;
+  response.cookies.set(COOKIE_NAMES.REFRESH_TOKEN, refreshToken, {
+    httpOnly: true,
+    secure: SECURE,
+    sameSite: "lax",
+    maxAge: COOKIE_MAX_AGE,
+    path: "/",
+  });
 
-  // ── Upsert user into Supabase (service role bypasses RLS) ─────────────────
-  const { data: existingUser } = await supabaseServer
-    .from("users")
-    .select("id")
-    .eq("spotify_id", spotifyId)
-    .maybeSingle();
-
-  const isNewUser = !existingUser;
-
-  await supabaseServer
-    .from("users")
-    .upsert(
-      {
-        spotify_id: spotifyId,
-        display_name: displayName,
-        email,
-        avatar_url: avatarUrl,
-        spotify_product: spotifyProduct,
-      },
-      { onConflict: "spotify_id" }
-    )
-    .select("id")
-    .single();
-
-  // ── Create sync_state and user_settings rows if new user ──────────────────
-  if (isNewUser) {
-    // Re-fetch to get the user id (upsert with no PK returns the row, but be safe)
-    const { data: userRow } = await supabaseServer
-      .from("users")
-      .select("id")
-      .eq("spotify_id", spotifyId)
-      .single();
-
-    if (userRow) {
-      await supabaseServer.from("sync_state").insert({ user_id: userRow.id });
-      await supabaseServer.from("user_settings").insert({ user_id: userRow.id });
+  // Try to fetch /v1/me with a short timeout to get the user ID and set
+  // the long-lived spotify_user_id cookie immediately. If this fails
+  // (timeout, rate-limit), the pending_profile path in getCurrentUser
+  // will handle it on the next session check.
+  try {
+    const meRes = await fetch("https://api.spotify.com/v1/me", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (meRes.ok) {
+      const me = await meRes.json();
+      if (me.id) {
+        response.cookies.set(COOKIE_NAMES.USER_ID, String(me.id), {
+          httpOnly: true,
+          secure: SECURE,
+          sameSite: "lax",
+          maxAge: COOKIE_MAX_AGE,
+          path: "/",
+        });
+        // No longer need the pending profile cookie
+        response.cookies.delete("spotify_pending_profile");
+      }
     }
+  } catch {
+    // Timeout or error — pending_profile will handle it lazily
   }
 
-  // ── Set cookies and redirect ──────────────────────────────────────────────
-  const response = NextResponse.redirect(new URL("/library", request.url));
-
-  response.cookies.set("spotify_access_token", accessToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: tokens.expires_in, // typically 3600 (1 hour)
-    path: "/",
-  });
-
-  response.cookies.set("spotify_refresh_token", refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    path: "/",
-  });
-
-  // Note: redirect is server-side here. The client-side window.location.href
-  // note in the spec applies to post-login flows from client components.
   return response;
 }

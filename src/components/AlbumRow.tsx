@@ -39,7 +39,7 @@ export default function AlbumRow({
   onOpenAlbumDetail,
 }: AlbumRowProps) {
   const [expanded, setExpanded] = useState(false);
-  const { play } = usePlayback();
+  const { play, playAlbum: playAlbumContext } = usePlayback();
 
   // Singles (one-track albums) shouldn't be expandable — they're the
   // same thing as their one track. album_type 'single' is the Spotify
@@ -49,7 +49,19 @@ export default function AlbumRow({
 
   const playAlbum = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (album.spotify_uri) {
+    // Prefer playing the full album track list in order (auto-advances
+    // at track end). Fall back to the album context_uri, then to the
+    // first track as a single.
+    const albumTracks = tracks.filter((t) => t.spotify_uri);
+    if (albumTracks.length > 1) {
+      playAlbumContext(
+        albumTracks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          spotifyUri: t.spotify_uri,
+        }))
+      );
+    } else if (album.spotify_uri) {
       play(album.id, album.title, album.spotify_uri);
     } else if (tracks[0]) {
       play(tracks[0].id, tracks[0].title, tracks[0].spotify_uri);
@@ -205,6 +217,7 @@ export default function AlbumRow({
                   ))}
                 </div>
               )}
+
             </div>
           </motion.div>
         )}

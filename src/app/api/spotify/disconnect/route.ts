@@ -8,6 +8,8 @@ export async function POST() {
 
   response.cookies.delete("spotify_access_token");
   response.cookies.delete("spotify_refresh_token");
+  response.cookies.delete("spotify_user_id");
+  response.cookies.delete("spotify_pending_profile");
 
   return response;
 }

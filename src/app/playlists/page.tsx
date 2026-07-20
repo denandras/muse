@@ -11,6 +11,7 @@ import {
   Check,
   Music,
   AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import type { Genre, Mood } from "@/lib/types";
 
@@ -39,93 +40,83 @@ export default function PlaylistsPage() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [playlistsRes, genresRes, moodsRes] = await Promise.allSettled([
+        fetch("/api/spotify/playlists"),
+        fetch("/api/genres"),
+        fetch("/api/moods"),
+      ]);
 
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [playlistsRes, genresRes, moodsRes] = await Promise.allSettled([
-          fetch("/api/spotify/playlists"),
-          fetch("/api/genres"),
-          fetch("/api/moods"),
-        ]);
-
-        if (!active) return;
-
-        // Genres + moods are non-fatal if they fail.
-        if (genresRes.status === "fulfilled") {
-          try {
-            const g = await genresRes.value.json();
-            setGenres(Array.isArray(g) ? g : g?.genres ?? []);
-          } catch {
-            /* ignore parse error */
-          }
-        }
-        if (moodsRes.status === "fulfilled") {
-          try {
-            const m = await moodsRes.value.json();
-            setMoods(Array.isArray(m) ? m : m?.moods ?? []);
-          } catch {
-            /* ignore parse error */
-          }
-        }
-
-        if (playlistsRes.status === "rejected") {
-          setError("Failed to reach the Spotify playlists API.");
-          return;
-        }
-
-        const playlistsResponse = playlistsRes.value;
-        let payload: unknown = null;
+      // Genres + moods are non-fatal if they fail.
+      if (genresRes.status === "fulfilled") {
         try {
-          payload = await playlistsResponse.json();
+          const g = await genresRes.value.json();
+          setGenres(Array.isArray(g) ? g : g?.genres ?? []);
         } catch {
-          setError("Spotify playlists API returned an invalid response.");
-          return;
+          /* ignore parse error */
         }
-        if (!active) return;
-
-        const obj = (payload ?? {}) as Record<string, unknown>;
-
-        // Spotify API 401 — user hasn't granted playlist-read-private.
-        // Show a friendly error state instead of crashing.
-        if (playlistsResponse.status === 401) {
-          setError(
-            (obj.error as string | undefined) ??
-              "Spotify returned 401 (unauthorized)."
-          );
-          return;
-        }
-
-        if (!playlistsResponse.ok) {
-          setError(
-            (obj.error as string | undefined) ??
-              `Spotify API error ${playlistsResponse.status}`
-          );
-          return;
-        }
-
-        const list = Array.isArray(payload)
-          ? (payload as SpotifyPlaylist[])
-          : (obj.playlists as SpotifyPlaylist[] | undefined) ?? [];
-        setPlaylists(list);
-        if (obj.error && !obj.playlists) {
-          setError(String(obj.error));
-        }
-      } catch (e) {
-        if (active) setError(String(e));
-      } finally {
-        if (active) setLoading(false);
       }
-    }
+      if (moodsRes.status === "fulfilled") {
+        try {
+          const m = await moodsRes.value.json();
+          setMoods(Array.isArray(m) ? m : m?.moods ?? []);
+        } catch {
+          /* ignore parse error */
+        }
+      }
 
-    void load();
-    return () => {
-      active = false;
-    };
+      if (playlistsRes.status === "rejected") {
+        setError("Failed to reach the Spotify playlists API.");
+        return;
+      }
+
+      const playlistsResponse = playlistsRes.value;
+      let payload: unknown = null;
+      try {
+        payload = await playlistsResponse.json();
+      } catch {
+        setError("Spotify playlists API returned an invalid response.");
+        return;
+      }
+
+      const obj = (payload ?? {}) as Record<string, unknown>;
+
+      if (playlistsResponse.status === 401) {
+        setError(
+          (obj.error as string | undefined) ??
+            "Spotify returned 401 (unauthorized)."
+        );
+        return;
+      }
+
+      if (!playlistsResponse.ok) {
+        setError(
+          (obj.error as string | undefined) ??
+            `Spotify API error ${playlistsResponse.status}`
+        );
+        return;
+      }
+
+      const list = Array.isArray(payload)
+        ? (payload as SpotifyPlaylist[])
+        : (obj.playlists as SpotifyPlaylist[] | undefined) ?? [];
+      setPlaylists(list);
+      if (obj.error && !obj.playlists) {
+        setError(String(obj.error));
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const handleImport = useCallback(
     async (playlistId: string) => {
@@ -198,11 +189,29 @@ export default function PlaylistsPage() {
       ) : error ? (
         <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-4 py-4 text-sm text-amber-200 flex items-start gap-3">
           <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
-          <div>
+          <div className="flex-1">
             <div className="font-medium mb-0.5">Couldn&apos;t load playlists</div>
-            <div className="text-amber-200/80">
-              {error}. You may need to sign out and reconnect Spotify to grant
-              playlist access (the <code>playlist-read-private</code> scope).
+            <div className="text-amber-200/80 mb-3">
+              {error}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setError(null);
+                  setLoading(true);
+                  void load();
+                }}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/[0.08] text-white/80 text-sm hover:bg-white/[0.12] transition-colors"
+              >
+                <RefreshCw size={14} />
+                Retry
+              </button>
+              <a
+                href="/api/spotify/auth"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#1DB954] text-black text-sm font-medium hover:bg-[#1ed760] transition-colors"
+              >
+                Reconnect Spotify
+              </a>
             </div>
           </div>
         </div>

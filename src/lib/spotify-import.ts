@@ -68,6 +68,10 @@ export interface ImportResult {
   albumsIncrementalStop: boolean;
   likedTracksTotal: number;
   albumsTotal: number;
+  /** When >0, the album scan has more pages to process — send albumOffset=N in the next batch request. 0 means albums are fully synced. */
+  albumNextOffset: number;
+  /** True if all album pages were scanned (no more batches needed). */
+  albumsComplete: boolean;
 }
 
 export interface ImportOptions {
@@ -79,6 +83,10 @@ export interface ImportOptions {
   pageSize?: number;
   /** Override max retries on 429 (default 5). */
   maxRetries?: number;
+  /** Start album scan from this Spotify offset (for batched sync). Default 0. */
+  albumStartOffset?: number;
+  /** Max album pages to process in this invocation (batch size limit). Default Infinity. */
+  albumMaxPages?: number;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -92,6 +100,8 @@ interface SpotifySavedTrack {
     uri: string;
     name: string;
     duration_ms: number;
+    track_number: number;
+    disc_number: number;
     album: { id: string; name: string; images: Array<{ url: string }> };
     artists: Array<{ name: string }>;
   };
@@ -133,6 +143,8 @@ interface SpotifyAlbumTracksPage {
     name: string;
     duration_ms: number;
     artists: Array<{ name: string }>;
+    track_number: number;
+    disc_number: number;
   }>;
   total: number;
   next: string | null;
@@ -205,6 +217,8 @@ interface TrackRow {
   album_spotify_id: string | null;
   album_cover_url: string | null;
   duration_ms: number;
+  track_number: number | null;
+  disc_number: number | null;
   is_liked: boolean;
   added_at: string;
 }
@@ -418,6 +432,8 @@ export async function importLikedTracks(
         album_spotify_id: t.album?.id ?? null,
         album_cover_url: t.album?.images?.[0]?.url ?? null,
         duration_ms: t.duration_ms,
+        track_number: t.track_number ?? null,
+        disc_number: t.disc_number ?? null,
         is_liked: true,
         added_at: item.added_at,
       };
@@ -483,11 +499,17 @@ export async function importSavedAlbums(
   albumTracksImported: number;
   albumsTotal: number;
   incrementalStop: boolean;
+  albumNextOffset: number;
+  albumsComplete: boolean;
 }> {
   const pageSize = opts.pageSize ?? 50;
   const maxRetries = opts.maxRetries ?? 5;
+  // Batched sync: start from this offset (default 0) and stop after maxPages
+  // (default unlimited — backward-compatible with single-request mode).
+  const startOffset = opts.albumStartOffset ?? 0;
+  const maxPages = opts.albumMaxPages ?? Infinity;
 
-  let offset = 0;
+  let offset = startOffset;
   let page = 0;
   let albumsImported = 0;
   let albumTracksImported = 0;
@@ -495,6 +517,7 @@ export async function importSavedAlbums(
   let incrementalStop = false;
   let consecutiveAllExistingPages = 0;
   const STOP_AFTER_EXISTING_PAGES = 2;
+  let reachedEnd = false;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -605,6 +628,8 @@ export async function importSavedAlbums(
           album_spotify_id: album.id,
           album_cover_url: album.images?.[0]?.url ?? null,
           duration_ms: t.duration_ms,
+          track_number: t.track_number ?? null,
+          disc_number: t.disc_number ?? null,
           is_liked: false,
           added_at: item.added_at,
         });
@@ -668,6 +693,8 @@ export async function importSavedAlbums(
           album_spotify_id: album.id,
           album_cover_url: album.images?.[0]?.url ?? null,
           duration_ms: t.duration_ms,
+          track_number: t.track_number ?? null,
+          disc_number: t.disc_number ?? null,
           is_liked: false,
           added_at: item.added_at,
         });
@@ -706,15 +733,28 @@ export async function importSavedAlbums(
       consecutiveAllExistingPages = 0;
     }
 
-    if (!data.next) break;
+    if (!data.next) {
+      reachedEnd = true;
+      break;
+    }
     offset += pageSize;
+
+    // Batched sync: stop after processing maxPages pages in this invocation.
+    // The client will send a follow-up request with albumStartOffset=offset.
+    if (page >= maxPages) break;
   }
 
   await saveSyncState(supabase, user.id, {
     saved_albums_synced_at: new Date().toISOString(),
   });
 
-  return { albumsImported, albumTracksImported, albumsTotal, incrementalStop };
+  // If we broke out due to maxPages (not reachedEnd), the next offset to
+  // resume from is the current offset. If we reached the end or hit
+  // incremental stop, there's no more to process.
+  const albumNextOffset = reachedEnd || incrementalStop ? 0 : offset;
+  const albumsComplete = reachedEnd || incrementalStop;
+
+  return { albumsImported, albumTracksImported, albumsTotal, incrementalStop, albumNextOffset, albumsComplete };
 }
 
 /** Fetches all tracks from a single album via GET /albums/{id}/tracks. */
@@ -729,6 +769,8 @@ async function fetchAlbumTracks(
   uri: string;
   name: string;
   duration_ms: number;
+  track_number: number;
+  disc_number: number;
   artists: Array<{ name: string }>;
 }>> {
   const all: Array<{
@@ -736,6 +778,8 @@ async function fetchAlbumTracks(
     uri: string;
     name: string;
     duration_ms: number;
+    track_number: number;
+    disc_number: number;
     artists: Array<{ name: string }>;
   }> = [];
   let offset = 0;
@@ -778,6 +822,8 @@ async function fetchAlbumTracksConcurrent(
   uri: string;
   name: string;
   duration_ms: number;
+  track_number: number;
+  disc_number: number;
   artists: Array<{ name: string }>;
 }>>> {
   const results: Array<Array<{
@@ -785,6 +831,8 @@ async function fetchAlbumTracksConcurrent(
     uri: string;
     name: string;
     duration_ms: number;
+    track_number: number;
+    disc_number: number;
     artists: Array<{ name: string }>;
   }>> = new Array(albums.length).fill(null);
   let next = 0;
@@ -844,6 +892,8 @@ export async function runFullImport(
     albumsIncrementalStop: false,
     likedTracksTotal: 0,
     albumsTotal: 0,
+    albumNextOffset: 0,
+    albumsComplete: true,
   };
 
   if (!opts.albumsOnly) {
@@ -871,6 +921,8 @@ export async function runFullImport(
     result.albumTracksImported = albums.albumTracksImported;
     result.albumsTotal = albums.albumsTotal;
     result.albumsIncrementalStop = albums.incrementalStop;
+    result.albumNextOffset = albums.albumNextOffset;
+    result.albumsComplete = albums.albumsComplete;
   }
 
   // Update aggregate counts in sync_state

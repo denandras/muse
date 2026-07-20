@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, mergeRefreshedCookies } from '@/lib/auth'
+import { getCurrentUser, getValidAccessToken, mergeRefreshedCookies } from '@/lib/auth'
 
 /**
  * Removes a single track from the user's Spotify "Liked Songs" by calling
@@ -13,8 +13,12 @@ export async function DELETE(request: NextRequest) {
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  const { supabase, user } = auth
 
-  const { supabase, accessToken, user } = auth
+  const { token: accessToken, refreshedResponse: tokenRefresh } = await getValidAccessToken(request)
+  if (!accessToken) {
+    return NextResponse.json({ error: 'Spotify token expired' }, { status: 401 })
+  }
 
   // Parse the track id from the URL search params (?track_id=...) for a DELETE
   // — DELETE bodies are awkward to send from fetch in the browser.
@@ -48,7 +52,7 @@ export async function DELETE(request: NextRequest) {
   if (!track.is_liked) {
     // Already not liked — idempotent success.
     const response = NextResponse.json({ ok: true, already: true })
-    mergeRefreshedCookies(response, auth.refreshedResponse)
+    mergeRefreshedCookies(response, tokenRefresh)
     return response
   }
 
@@ -67,7 +71,7 @@ export async function DELETE(request: NextRequest) {
       { error: `Spotify delete error: ${res.status}`, detail: text },
       { status: 502 }
     )
-    mergeRefreshedCookies(response, auth.refreshedResponse)
+    mergeRefreshedCookies(response, tokenRefresh)
     return response
   }
 
@@ -86,11 +90,11 @@ export async function DELETE(request: NextRequest) {
       },
       { status: 500 }
     )
-    mergeRefreshedCookies(response, auth.refreshedResponse)
+    mergeRefreshedCookies(response, tokenRefresh)
     return response
   }
 
   const response = NextResponse.json({ ok: true })
-  mergeRefreshedCookies(response, auth.refreshedResponse)
+  mergeRefreshedCookies(response, tokenRefresh)
   return response
 }

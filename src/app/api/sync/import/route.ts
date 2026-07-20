@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getValidAccessToken, mergeRefreshedCookies } from "@/lib/auth";
 import {
   runFullImport,
   type ImportProgressEvent,
@@ -27,17 +27,37 @@ import {
  *
  * The client reads this with a ReadableStream reader and parses each line.
  */
+// Hobby plan allows up to 300s (5 min) with Fluid compute (default).
+// Sync of a large library can take a couple minutes.
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   const auth = await getCurrentUser(request);
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { supabase, accessToken, user, refreshedResponse } = auth;
+  const { supabase, user } = auth;
+
+  // Ensure we have a valid (non-expired) Spotify access token.
+  const { token: accessToken, refreshedResponse: tokenRefreshResponse } =
+    await getValidAccessToken(request);
+  if (!accessToken) {
+    return NextResponse.json(
+      { error: "Spotify token expired — please reconnect" },
+      { status: 401 }
+    );
+  }
 
   const sp = request.nextUrl.searchParams;
   const albumsOnly = sp.get("albumsOnly") === "true";
   const likedOnly = sp.get("likedOnly") === "true";
+  // Batched album sync: client sends albumOffset to resume from where the
+  // previous batch stopped. albumMaxPages caps how many pages (of 50 albums
+  // each) this invocation processes — prevents 524 server timeout on large
+  // libraries.
+  const albumOffset = parseInt(sp.get("albumOffset") ?? "0", 10) || 0;
+  const albumMaxPages = parseInt(sp.get("albumMaxPages") ?? "0", 10) || undefined;
 
   const encoder = new TextEncoder();
 
@@ -57,7 +77,7 @@ export async function POST(request: NextRequest) {
           accessToken,
           user,
           onProgress,
-          { albumsOnly, likedOnly }
+          { albumsOnly, likedOnly, albumStartOffset: albumOffset, albumMaxPages }
         );
         send({ result });
       } catch (err) {
@@ -78,10 +98,10 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // If getCurrentUser refreshed the token, persist the new cookies on
-  // this streaming response too.
-  if (refreshedResponse) {
-    const setCookies = refreshedResponse.headers.getSetCookie?.() ?? [];
+  // If the token was refreshed, persist the new cookies on this
+  // streaming response too.
+  if (tokenRefreshResponse) {
+    const setCookies = tokenRefreshResponse.headers.getSetCookie?.() ?? [];
     for (const cookie of setCookies) {
       response.headers.append("set-cookie", cookie);
     }

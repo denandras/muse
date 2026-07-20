@@ -31,6 +31,8 @@ export interface Track {
   album_spotify_id: string | null;
   album_cover_url: string | null;
   duration_ms: number | null;
+  track_number: number | null;
+  disc_number: number | null;
   is_liked: boolean;
   is_favorite: boolean;
   stars: number | null;

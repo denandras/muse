@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import {
+  getCurrentUser,
+  getValidAccessToken,
+  refreshOn401,
+  mergeRefreshedCookies,
+} from '@/lib/auth'
 
 export async function GET(
   request: NextRequest,
@@ -129,6 +134,61 @@ export async function DELETE(
   const { supabase, user } = auth
   const { id } = await params
 
+  // Fetch the album to know whether to remove it from Spotify saved albums.
+  const { data: album } = await supabase
+    .from('albums')
+    .select('id, spotify_id')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  let tokenRefresh = null as NextResponse | null
+
+  // If the album is saved in Spotify, remove it there first.
+  if (album?.spotify_id) {
+    const { token: accessToken, refreshedResponse: tr1 } =
+      await getValidAccessToken(request)
+    tokenRefresh = tr1
+
+    if (accessToken) {
+      let res = await fetch(
+        `https://api.spotify.com/v1/me/albums?ids=${album.spotify_id}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      )
+
+      if (res.status === 401) {
+        const { token: refreshed, refreshedResponse: tr2 } =
+          await refreshOn401(request)
+        if (tr2) tokenRefresh = tr2
+        if (refreshed) {
+          res = await fetch(
+            `https://api.spotify.com/v1/me/albums?ids=${album.spotify_id}`,
+            {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${refreshed}` },
+            }
+          )
+        }
+      }
+
+      if (!res.ok) {
+        const text = await res.text()
+        const response = NextResponse.json(
+          { error: `Spotify delete error: ${res.status}`, detail: text },
+          { status: 502 }
+        )
+        mergeRefreshedCookies(response, tokenRefresh)
+        return response
+      }
+    }
+  }
+
+  // Delete the album row from Supabase. Junction tables
+  // (album_genres, album_moods) are ON DELETE CASCADE so associations
+  // are removed automatically.
   const { error } = await supabase
     .from('albums')
     .delete()
@@ -136,11 +196,15 @@ export async function DELETE(
     .eq('user_id', user.id)
 
   if (error) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: 'Failed to delete album', detail: error.message },
       { status: 500 }
     )
+    mergeRefreshedCookies(response, tokenRefresh)
+    return response
   }
 
-  return NextResponse.json({ success: true })
+  const response = NextResponse.json({ ok: true })
+  mergeRefreshedCookies(response, tokenRefresh)
+  return response
 }

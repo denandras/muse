@@ -36,11 +36,13 @@ export async function GET() {
     `https://accounts.spotify.com/authorize?${params.toString()}`
   );
 
-  // Clear stale tokens before re-authenticating so the callback
-  // starts fresh. Without this, old expired cookies can interfere
-  // with the new token flow.
+  // Clear stale tokens before re-authenticating, but KEEP the spotify_user_id
+  // cookie — the user's identity doesn't change between re-auths, and keeping
+  // it means the session stays valid even if /v1/me is rate-limited during
+  // the callback.
   response.cookies.delete("spotify_access_token");
   response.cookies.delete("spotify_refresh_token");
+  response.cookies.delete("spotify_pending_profile");
 
   return response;
 }
