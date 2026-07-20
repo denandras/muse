@@ -768,7 +768,7 @@ export default function LibraryPage() {
             {pagedTracks.length === 0 ? (
               <EmptyState label="No tracks match your filters." />
             ) : (
-              pagedTracks.map((track) => (
+              pagedTracks.map((track, i) => (
                 <motion.div
                   key={track.id}
                   variants={{
@@ -778,6 +778,12 @@ export default function LibraryPage() {
                 >
                   <TrackRow
                     track={track}
+                    // Standalone list: 1-based sequential position within the
+                    // full filtered+sorted view, accounting for pagination.
+                    // e.g. page 2 of 50 → 51, 52, …  Computed deterministically
+                    // from the page offset + array index — recomputes on
+                    // filter/sort change (handles reordering gracefully).
+                    displayNumber={safeTrackPage * PAGE_SIZE + i + 1}
                     showLikedBadge={false}
                     onRate={(s) => rateTrack(track.id, s)}
                     onToggleFavorite={(v) => toggleTrackFavorite(track.id, v)}

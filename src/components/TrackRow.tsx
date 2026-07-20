@@ -9,8 +9,47 @@ import FavoriteToggle from "./FavoriteToggle";
 import GenreBadge from "./GenreBadge";
 import MoodBadge from "./MoodBadge";
 
+/**
+ * Track display-number scheme (see also src/lib/types.ts → Track).
+ *
+ * Every track has TWO numbers:
+ *
+ * 1. Stable identifier — `track.id` (DB UUID).
+ *    This is the same in every view. It is used as the React key and for
+ *    dedup / equality checks. It never changes and is never displayed.
+ *
+ * 2. Display number — `displayNumber` prop (1-based, human-visible).
+ *    Context-dependent, computed deterministically by the PARENT:
+ *
+ *    a) Album tracklist (inside AlbumRow):
+ *       Use `track.track_number` (Spotify's position on the album disc).
+ *       Fallback when track_number is null (pre-backfill rows): 1-based
+ *       index within the album's sorted (disc_number, track_number) list.
+ *       This is the track's "real" position on the album and is stable
+ *       across re-syncs.
+ *
+ *    b) Standalone track list (library tracks view, liked songs, singles
+ *       shown as individual tracks): 1-based sequential position within
+ *       the full filtered + sorted + paginated view, computed as
+ *       `pageOffset + indexInPage + 1` (e.g. page 2 of 50 → 51, 52, …).
+ *       This is a list-position, not a stable property — it recomputes
+ *       when filters or sort order change, which is the desired behavior
+ *       ("handles reordering gracefully").
+ *
+ * Rules:
+ *  - No duplicate display numbers within a single rendered list.
+ *  - No skipped numbers (sequential lists are contiguous; album lists
+ *    use Spotify's track_number which may have gaps if the source album
+ *    has gaps — that's accurate, not a bug).
+ *  - The same track may show different display numbers in different
+ *    contexts (e.g. track 3 on an album vs. position 47 in liked songs).
+ *    That's correct — the number reflects the context, not the identity.
+ *  - The stable `track.id` is always the same regardless of context.
+ */
 interface TrackRowProps {
   track: Track;
+  /** 1-based display number shown to the left of the title. Omit to hide. */
+  displayNumber?: number;
   onRate?: (stars: number | null) => void;
   onToggleFavorite?: (value: boolean) => void;
   onOpenDetail?: () => void;
@@ -23,6 +62,7 @@ interface TrackRowProps {
 
 export default function TrackRow({
   track,
+  displayNumber,
   onRate,
   onToggleFavorite,
   onOpenDetail,
@@ -52,6 +92,13 @@ export default function TrackRow({
       style={{ marginLeft: indent * 24 }}
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
+        {/* Display number (1-based, context-dependent — see docblock above) */}
+        {displayNumber != null && (
+          <span className="w-5 flex-shrink-0 text-right text-xs text-white/30 tabular-nums select-none">
+            {displayNumber}
+          </span>
+        )}
+
         {/* Album cover thumbnail */}
         {showAlbumCover && (
           <div className="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden bg-white/[0.06]">

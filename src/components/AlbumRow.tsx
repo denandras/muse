@@ -203,10 +203,14 @@ export default function AlbumRow({
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5">
-                  {tracks.map((t) => (
+                  {tracks.map((t, i) => (
                     <TrackRow
                       key={t.id}
                       track={t}
+                      // Album context: use Spotify's track_number (the real
+                      // position on the disc). Fallback to 1-based index for
+                      // pre-backfill rows where track_number is null.
+                      displayNumber={t.track_number ?? i + 1}
                       showAlbumCover={false}
                       onRate={(s) => onRateTrack?.(t.id, s)}
                       onToggleFavorite={(v) =>
