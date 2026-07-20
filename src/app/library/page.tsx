@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Loader2, ChevronLeft, ChevronRight, Search, X, Play } from "lucide-react";
-import type { Album, Genre, Mood, Track, ViewMode } from "@/lib/types";
+import type { Album, Genre, Mood, Track, ViewMode, SortKey, SortDirection } from "@/lib/types";
 import FilterBar, { type FilterState } from "@/components/FilterBar";
 import ViewModeSwitch from "@/components/ViewModeSwitch";
 import TrackRow from "@/components/TrackRow";
@@ -66,6 +66,68 @@ function clearCache() {
   }
 }
 
+// --- Unified list type ---------------------------------------------------
+// Albums and tracks are merged into a single sorted list so they appear
+// interleaved in sort order rather than as two separate sections.
+type UnifiedItem =
+  | { kind: "album"; album: Album }
+  | { kind: "track"; track: Track };
+
+function sortUnified(
+  a: UnifiedItem,
+  b: UnifiedItem,
+  key: SortKey,
+  direction: SortDirection
+): number {
+  const mul = direction === "asc" ? 1 : -1;
+  const aTitle = a.kind === "album" ? a.album.title : a.track.title;
+  const bTitle = b.kind === "album" ? b.album.title : b.track.title;
+  const aArtist = a.kind === "album" ? a.album.artist : a.track.artist;
+  const bArtist = b.kind === "album" ? b.album.artist : b.track.artist;
+  const aStars = a.kind === "album" ? a.album.stars : a.track.stars;
+  const bStars = b.kind === "album" ? b.album.stars : b.track.stars;
+  const aAdded = a.kind === "album" ? a.album.added_at : a.track.added_at;
+  const bAdded = b.kind === "album" ? b.album.added_at : b.track.added_at;
+  switch (key) {
+    case "title":
+      return aTitle.localeCompare(bTitle) * mul;
+    case "artist":
+      return aArtist.localeCompare(bArtist) * mul;
+    case "album":
+      // For tracks, sort by album_title; for albums, sort by title (they ARE the album).
+      {
+        const aAlbum = a.kind === "album" ? a.album.title : (a.track.album_title ?? "");
+        const bAlbum = b.kind === "album" ? b.album.title : (b.track.album_title ?? "");
+        return aAlbum.localeCompare(bAlbum) * mul;
+      }
+    case "stars":
+      return ((aStars ?? 0) - (bStars ?? 0)) * mul;
+    case "play_count":
+      // Albums have no play count; treat as 0.
+      {
+        const aCount = a.kind === "album" ? 0 : a.track.play_count_all_time;
+        const bCount = b.kind === "album" ? 0 : b.track.play_count_all_time;
+        return (aCount - bCount) * mul;
+      }
+    case "added_at":
+      return (new Date(aAdded).getTime() - new Date(bAdded).getTime()) * mul;
+    case "last_played_at": {
+      const aVal = a.kind === "album" ? 0 : (a.track.last_played_at ? new Date(a.track.last_played_at).getTime() : 0);
+      const bVal = b.kind === "album" ? 0 : (b.track.last_played_at ? new Date(b.track.last_played_at).getTime() : 0);
+      return (aVal - bVal) * mul;
+    }
+    case "updated_at": {
+      const aU = a.kind === "album" ? a.album.updated_at : a.track.updated_at;
+      const bU = b.kind === "album" ? b.album.updated_at : b.track.updated_at;
+      const aVal = aU ? new Date(aU).getTime() : 0;
+      const bVal = bU ? new Date(bU).getTime() : 0;
+      return (aVal - bVal) * mul;
+    }
+    default:
+      return 0;
+  }
+}
+
 // --- Pagination ----------------------------------------------------------
 const PAGE_SIZE = 50;
 
@@ -89,12 +151,8 @@ export default function LibraryPage() {
     sortDirection: "desc",
   });
 
-  // Pagination state — separate page per section so each list paginates
-  // independently. Data is fully in memory (cached), so "preloading
-  // adjacent pages" is effectively free: slicing is O(1) and the rows for
-  // the next/prev page render instantly on navigation.
-  const [trackPage, setTrackPage] = useState(0);
-  const [albumPage, setAlbumPage] = useState(0);
+  // Single pagination state for the unified list.
+  const [unifiedPage, setUnifiedPage] = useState(0);
 
   // Track detail modal state
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
@@ -182,8 +240,7 @@ export default function LibraryPage() {
   // Reset pagination to first page whenever filters or view change so the
   // user always lands on a non-empty page.
   useEffect(() => {
-    setTrackPage(0);
-    setAlbumPage(0);
+    setUnifiedPage(0);
   }, [filters, view]);
 
   // Derive include/exclude sets from the tri-state genre filter.
@@ -336,27 +393,32 @@ export default function LibraryPage() {
       .sort((a, b) => sortTracks(a, b, filters.sort, filters.sortDirection));
   }, [tracks, filters, genreIncludeIds, genreExcludeIds, moodIncludeIds, moodExcludeIds, showAlbums, filteredAlbums]);
 
-  // Paginate the filtered results. Only the current page slice is rendered,
+  // Merge filtered albums and tracks into a single sorted list.
+  // Tracks belonging to a displayed album are already hidden by
+  // filteredTracks (the dedup logic above), so we just concatenate.
+  const unifiedList = useMemo(() => {
+    const items: UnifiedItem[] = [];
+    if (showAlbums) {
+      for (const a of filteredAlbums) items.push({ kind: "album", album: a });
+    }
+    if (showTracks) {
+      for (const t of filteredTracks) items.push({ kind: "track", track: t });
+    }
+    items.sort((a, b) => sortUnified(a, b, filters.sort, filters.sortDirection));
+    return items;
+  }, [showAlbums, showTracks, filteredAlbums, filteredTracks, filters.sort, filters.sortDirection]);
+
+  // Paginate the unified list. Only the current page slice is rendered,
   // which keeps filter toggles instant even with 1700+ items.
-  const trackPageCount = Math.max(1, Math.ceil(filteredTracks.length / PAGE_SIZE));
-  const albumPageCount = Math.max(1, Math.ceil(filteredAlbums.length / PAGE_SIZE));
-  const safeTrackPage = Math.min(trackPage, trackPageCount - 1);
-  const safeAlbumPage = Math.min(albumPage, albumPageCount - 1);
-  const pagedTracks = useMemo(
+  const unifiedPageCount = Math.max(1, Math.ceil(unifiedList.length / PAGE_SIZE));
+  const safeUnifiedPage = Math.min(unifiedPage, unifiedPageCount - 1);
+  const pagedItems = useMemo(
     () =>
-      filteredTracks.slice(
-        safeTrackPage * PAGE_SIZE,
-        safeTrackPage * PAGE_SIZE + PAGE_SIZE
+      unifiedList.slice(
+        safeUnifiedPage * PAGE_SIZE,
+        safeUnifiedPage * PAGE_SIZE + PAGE_SIZE
       ),
-    [filteredTracks, safeTrackPage]
-  );
-  const pagedAlbums = useMemo(
-    () =>
-      filteredAlbums.slice(
-        safeAlbumPage * PAGE_SIZE,
-        safeAlbumPage * PAGE_SIZE + PAGE_SIZE
-      ),
-    [filteredAlbums, safeAlbumPage]
+    [unifiedList, safeUnifiedPage]
   );
 
   // Tracks grouped by album spotify id (for album expansion).
@@ -498,12 +560,13 @@ export default function LibraryPage() {
 
   // Play all currently visible items in seen order. Albums expand to
   // their track list (in disc/track-number order), standalone tracks play
-  // as themselves. Builds a flat ordered list and hands it to the album
-  // context player so it auto-advances through everything.
+  // as themselves. Builds a flat ordered list from the unified page and
+  // hands it to the album context player so it auto-advances through everything.
   const playAllVisible = useCallback(() => {
     const list: Array<{ id: string; title?: string; spotifyUri?: string | null; artist?: string | null; albumArt?: string | null }> = [];
-    if (showAlbums) {
-      for (const album of pagedAlbums) {
+    for (const item of pagedItems) {
+      if (item.kind === "album") {
+        const album = item.album;
         const albumTracks = album.spotify_id
           ? tracksByAlbum.get(album.spotify_id) ?? []
           : album.tracks ?? [];
@@ -516,10 +579,8 @@ export default function LibraryPage() {
         } else if (album.spotify_uri) {
           list.push({ id: album.id, title: album.title, spotifyUri: album.spotify_uri, artist: album.artist, albumArt: album.cover_url });
         }
-      }
-    }
-    if (showTracks) {
-      for (const t of pagedTracks) {
+      } else {
+        const t = item.track;
         if (t.spotify_uri) {
           list.push({ id: t.id, title: t.title, spotifyUri: t.spotify_uri, artist: t.artist, albumArt: t.album_cover_url });
         }
@@ -527,7 +588,7 @@ export default function LibraryPage() {
     }
     if (list.length === 0) return;
     playAlbumContext(list);
-  }, [showAlbums, showTracks, pagedAlbums, pagedTracks, tracksByAlbum, playAlbumContext]);
+  }, [pagedItems, tracksByAlbum, playAlbumContext]);
 
   // Track detail modal save — PATCH track metadata, then sync tags.
   const handleTrackSave = useCallback(
@@ -705,7 +766,7 @@ export default function LibraryPage() {
         <button
           type="button"
           onClick={playAllVisible}
-          disabled={pagedTracks.length === 0 && pagedAlbums.length === 0}
+          disabled={pagedItems.length === 0}
           className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cream/[0.06] hover:bg-cream/[0.12] text-sm text-cream/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
           aria-label="Play all visible"
           title="Play all visible items in order"
@@ -728,38 +789,38 @@ export default function LibraryPage() {
         <span>{filteredAlbums.length} albums</span>
       </div>
 
-      {/* Albums */}
-      {showAlbums && (
-        <section className="flex flex-col gap-2">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={{
-              hidden: {},
-              visible: { transition: { staggerChildren: 0.02 } },
-            }}
-            className="flex flex-col gap-1.5"
-          >
-            {pagedAlbums.length === 0 ? (
-              <EmptyState label="No albums match your filters." />
-            ) : (
-              pagedAlbums.map((album) => (
-                <motion.div
-                  key={album.id}
-                  variants={{
-                    hidden: { opacity: 0, y: 6 },
-                    visible: { opacity: 1, y: 0 },
-                  }}
-                >
+      {/* Unified list — albums and tracks interleaved in sort order */}
+      <section className="flex flex-col gap-2">
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: {},
+            visible: { transition: { staggerChildren: 0.015 } },
+          }}
+          className="flex flex-col gap-1.5"
+        >
+          {pagedItems.length === 0 ? (
+            <EmptyState label="No items match your filters." />
+          ) : (
+            pagedItems.map((item, i) => (
+              <motion.div
+                key={item.kind === "album" ? `a-${item.album.id}` : `t-${item.track.id}`}
+                variants={{
+                  hidden: { opacity: 0, y: 6 },
+                  visible: { opacity: 1, y: 0 },
+                }}
+              >
+                {item.kind === "album" ? (
                   <AlbumRow
-                    album={album}
+                    album={item.album}
                     tracks={
-                      album.spotify_id
-                        ? tracksByAlbum.get(album.spotify_id) ?? []
-                        : album.tracks ?? []
+                      item.album.spotify_id
+                        ? tracksByAlbum.get(item.album.spotify_id) ?? []
+                        : item.album.tracks ?? []
                     }
-                    onRate={(s) => rateAlbum(album.id, s)}
-                    onToggleFavorite={(v) => toggleAlbumFavorite(album.id, v)}
+                    onRate={(s) => rateAlbum(item.album.id, s)}
+                    onToggleFavorite={(v) => toggleAlbumFavorite(item.album.id, v)}
                     onRateTrack={(tid, s) => rateTrack(tid, s)}
                     onToggleTrackFavorite={(tid, v) =>
                       toggleTrackFavorite(tid, v)
@@ -768,80 +829,36 @@ export default function LibraryPage() {
                       const t = tracks.find((x) => x.id === tid) ?? null;
                       setEditingTrack(t);
                     }}
-                    onOpenAlbumDetail={() => setEditingAlbum(album)}
+                    onOpenAlbumDetail={() => setEditingAlbum(item.album)}
                   />
-                </motion.div>
-              ))
-            )}
-          </motion.div>
-
-          {albumPageCount > 1 && (
-            <Pagination
-              page={safeAlbumPage}
-              pageCount={albumPageCount}
-              total={filteredAlbums.length}
-              pageSize={PAGE_SIZE}
-              onChange={setAlbumPage}
-            />
-          )}
-        </section>
-      )}
-
-      {/* Tracks (only when not inside an album view) */}
-      {showTracks && (
-        <section className="flex flex-col gap-2">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={{
-              hidden: {},
-              visible: { transition: { staggerChildren: 0.015 } },
-            }}
-            className="flex flex-col gap-1.5"
-          >
-            {pagedTracks.length === 0 ? (
-              <EmptyState label="No tracks match your filters." />
-            ) : (
-              pagedTracks.map((track, i) => (
-                <motion.div
-                  key={track.id}
-                  variants={{
-                    hidden: { opacity: 0, y: 6 },
-                    visible: { opacity: 1, y: 0 },
-                  }}
-                >
+                ) : (
                   <TrackRow
-                    track={track}
-                    // Standalone list: 1-based sequential position within the
-                    // full filtered+sorted view, accounting for pagination.
-                    // e.g. page 2 of 50 → 51, 52, …  Computed deterministically
-                    // from the page offset + array index — recomputes on
-                    // filter/sort change (handles reordering gracefully).
-                    displayNumber={safeTrackPage * PAGE_SIZE + i + 1}
+                    track={item.track}
+                    displayNumber={safeUnifiedPage * PAGE_SIZE + i + 1}
                     showLikedBadge={false}
-                    // Pass all visible tracks on this page as the queue so
-                    // next/previous navigate the page's track list.
-                    queueTracks={pagedTracks}
-                    onRate={(s) => rateTrack(track.id, s)}
-                    onToggleFavorite={(v) => toggleTrackFavorite(track.id, v)}
-                    onOpenDetail={() => setEditingTrack(track)}
+                    queueTracks={pagedItems
+                      .filter((p) => p.kind === "track")
+                      .map((p) => (p as { kind: "track"; track: Track }).track)}
+                    onRate={(s) => rateTrack(item.track.id, s)}
+                    onToggleFavorite={(v) => toggleTrackFavorite(item.track.id, v)}
+                    onOpenDetail={() => setEditingTrack(item.track)}
                   />
-                </motion.div>
-              ))
-            )}
-          </motion.div>
-
-          {trackPageCount > 1 && (
-            <Pagination
-              page={safeTrackPage}
-              pageCount={trackPageCount}
-              total={filteredTracks.length}
-              pageSize={PAGE_SIZE}
-              onChange={setTrackPage}
-            />
+                )}
+              </motion.div>
+            ))
           )}
-        </section>
-      )}
+        </motion.div>
+
+        {unifiedPageCount > 1 && (
+          <Pagination
+            page={safeUnifiedPage}
+            pageCount={unifiedPageCount}
+            total={unifiedList.length}
+            pageSize={PAGE_SIZE}
+            onChange={setUnifiedPage}
+          />
+        )}
+      </section>
 
       {/* Track detail modal */}
       <TrackDetailModal
