@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Music2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -13,11 +13,23 @@ const SPOTIFY_ERROR_MESSAGES: Record<string, string> = {
   state_mismatch: "Security check failed. Please try signing in again.",
 };
 
+function SpotifyErrorBanner() {
+  const searchParams = useSearchParams();
+  const spotifyError = searchParams.get("spotify_error");
+
+  if (!spotifyError) return null;
+
+  return (
+    <div className="w-full max-w-md rounded-2xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
+      {SPOTIFY_ERROR_MESSAGES[spotifyError] ??
+        "An unexpected error occurred during Spotify login."}
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const { isAuthenticated, loading } = useAuth();
-  const searchParams = useSearchParams();
-  const spotifyError = searchParams.get("spotify_error");
 
   // Redirect to library if already authenticated
   useEffect(() => {
@@ -55,12 +67,9 @@ export default function Home() {
           </p>
         </div>
 
-        {spotifyError && (
-          <div className="w-full max-w-md rounded-2xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
-            {SPOTIFY_ERROR_MESSAGES[spotifyError] ??
-              "An unexpected error occurred during Spotify login."}
-          </div>
-        )}
+        <Suspense fallback={null}>
+          <SpotifyErrorBanner />
+        </Suspense>
 
         {loading ? (
           <div className="h-12 w-64 rounded-2xl glass animate-pulse" />
