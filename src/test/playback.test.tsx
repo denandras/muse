@@ -15,7 +15,9 @@ function TestConsumer() {
       <div data-testid="current-title">{playback.currentTrackTitle ?? 'none'}</div>
       <div data-testid="current-artist">{playback.currentTrackArtist ?? 'none'}</div>
       <div data-testid="current-art">{playback.currentTrackAlbumArt ?? 'none'}</div>
-      <button onClick={() => playback.play('track-1', 'Test Track', 'spotify:track:1')}>Play</button>
+      <div data-testid="queue-length">{playback.queueLength}</div>
+      <div data-testid="queue-index">{playback.queueIndex}</div>
+      <button onClick={() => playback.play('track-1', 'Test Track', 'spotify:track:1', 'Test Artist', 'https://example.com/art.png')}>Play</button>
       <button onClick={() => playback.pause()}>Pause</button>
       <button onClick={() => playback.resume()}>Resume</button>
       <button onClick={() => playback.stop()}>Stop</button>

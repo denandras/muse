@@ -79,9 +79,9 @@ export default function TrackRow({
   const handlePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isCurrent) {
-      isPlaying ? pause() : play(track.id, track.title, track.spotify_uri);
+      isPlaying ? pause() : play(track.id, track.title, track.spotify_uri, track.artist, track.album_cover_url);
     } else {
-      play(track.id, track.title, track.spotify_uri);
+      play(track.id, track.title, track.spotify_uri, track.artist, track.album_cover_url);
     }
   };
 

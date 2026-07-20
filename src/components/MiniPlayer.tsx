@@ -33,6 +33,8 @@ export default function MiniPlayer() {
     spotifyConnected,
     currentTime,
     duration,
+    queueLength,
+    queueIndex,
     pause,
     resume,
     seek,
@@ -53,6 +55,14 @@ export default function MiniPlayer() {
 
   const hasTrack = currentTrackTitle !== null;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Next/Prev are disabled when: not Premium, OR at queue boundary.
+  // queueIndex is 0-based; queueLength is the total count.
+  // Single track (queueLength ≤ 1): both disabled.
+  // First track (queueIndex === 0): prev disabled.
+  // Last track (queueIndex === queueLength - 1): next disabled.
+  const canPrev = isPremium && queueLength > 1 && queueIndex > 0;
+  const canNext = isPremium && queueLength > 1 && queueIndex < queueLength - 1;
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (duration <= 0) return;
@@ -139,16 +149,23 @@ export default function MiniPlayer() {
                 <p className="truncate text-sm font-medium text-cream/90">
                   {currentTrackTitle}
                 </p>
-                <p className="truncate text-xs text-cream/50">
-                  {currentTrackArtist ?? "—"}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-xs text-cream/50">
+                    {currentTrackArtist ?? "—"}
+                  </p>
+                  {queueLength > 1 && (
+                    <span className="text-[10px] tabular-nums text-cream/30 flex-shrink-0">
+                      {queueIndex + 1}/{queueLength}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Controls */}
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={previous}
-                  disabled={!isPremium}
+                  disabled={!canPrev}
                   className="w-8 h-8 flex items-center justify-center rounded-lg text-cream/60 hover:text-cream hover:bg-cream/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label="Previous"
                 >
@@ -168,7 +185,7 @@ export default function MiniPlayer() {
                 </button>
                 <button
                   onClick={next}
-                  disabled={!isPremium}
+                  disabled={!canNext}
                   className="w-8 h-8 flex items-center justify-center rounded-lg text-cream/60 hover:text-cream hover:bg-cream/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label="Next"
                 >

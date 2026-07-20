@@ -471,7 +471,7 @@ export default function LibraryPage() {
   // as themselves. Builds a flat ordered list and hands it to the album
   // context player so it auto-advances through everything.
   const playAllVisible = useCallback(() => {
-    const list: Array<{ id: string; title?: string; spotifyUri?: string | null }> = [];
+    const list: Array<{ id: string; title?: string; spotifyUri?: string | null; artist?: string | null; albumArt?: string | null }> = [];
     if (showAlbums) {
       for (const album of pagedAlbums) {
         const albumTracks = album.spotify_id
@@ -480,18 +480,18 @@ export default function LibraryPage() {
         if (albumTracks.length > 0) {
           for (const t of albumTracks) {
             if (t.spotify_uri) {
-              list.push({ id: t.id, title: t.title, spotifyUri: t.spotify_uri });
+              list.push({ id: t.id, title: t.title, spotifyUri: t.spotify_uri, artist: t.artist, albumArt: t.album_cover_url });
             }
           }
         } else if (album.spotify_uri) {
-          list.push({ id: album.id, title: album.title, spotifyUri: album.spotify_uri });
+          list.push({ id: album.id, title: album.title, spotifyUri: album.spotify_uri, artist: album.artist, albumArt: album.cover_url });
         }
       }
     }
     if (showTracks) {
       for (const t of pagedTracks) {
         if (t.spotify_uri) {
-          list.push({ id: t.id, title: t.title, spotifyUri: t.spotify_uri });
+          list.push({ id: t.id, title: t.title, spotifyUri: t.spotify_uri, artist: t.artist, albumArt: t.album_cover_url });
         }
       }
     }

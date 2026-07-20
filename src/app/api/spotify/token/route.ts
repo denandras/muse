@@ -5,8 +5,18 @@ import { NextRequest, NextResponse } from "next/server";
  * The access token is stored in an httpOnly cookie, so the client
  * cannot read it directly. This endpoint proxies it.
  *
- * If the token is expired (checked via /v1/me), it auto-refreshes
- * using the refresh token cookie and updates the cookie.
+ * CRITICAL: This route is called frequently — by the SDK's
+ * getOAuthToken callback (every ~60s internally + on demand), by the
+ * 5-second readiness poll, and by play/playAlbum. Pre-validating with
+ * /v1/me on every call causes 429 rate-limiting from Spotify, which
+ * silently kills audio playback on desktop (the SDK can't get a token
+ * → audio stops, but no player_state_changed fires → UI still shows
+ * "playing").
+ *
+ * Instead: return the cookie token as-is (no pre-validation). The
+ * token has a 1-hour TTL; it's almost always valid. If it's expired,
+ * the SDK fires `authentication_error` and the client re-inits with a
+ * refreshed token.
  */
 export async function GET(request: NextRequest) {
   let accessToken = request.cookies.get("spotify_access_token")?.value;
@@ -16,23 +26,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Not connected to Spotify" }, { status: 401 });
   }
 
-  // If we have an access token, check if it's still valid
+  // Return the cookie token as-is — no /v1/me pre-validation.
   if (accessToken) {
-    const checkRes = await fetch("https://api.spotify.com/v1/me", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (checkRes.ok) {
-      return NextResponse.json({ access_token: accessToken });
-    }
-    // Token expired — fall through to refresh
+    return NextResponse.json({ access_token: accessToken });
   }
 
+  // No access token — try refreshing with the refresh token
   if (!refreshToken) {
     return NextResponse.json({ error: "No refresh token available" }, { status: 401 });
   }
 
-  // Refresh the token
   const clientId = process.env.SPOTIFY_CLIENT_ID!;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET!;
 

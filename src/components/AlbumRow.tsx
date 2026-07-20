@@ -59,12 +59,14 @@ export default function AlbumRow({
           id: t.id,
           title: t.title,
           spotifyUri: t.spotify_uri,
+          artist: t.artist,
+          albumArt: t.album_cover_url,
         }))
       );
     } else if (album.spotify_uri) {
-      play(album.id, album.title, album.spotify_uri);
+      play(album.id, album.title, album.spotify_uri, album.artist, album.cover_url);
     } else if (tracks[0]) {
-      play(tracks[0].id, tracks[0].title, tracks[0].spotify_uri);
+      play(tracks[0].id, tracks[0].title, tracks[0].spotify_uri, tracks[0].artist, tracks[0].album_cover_url);
     }
   };
 
