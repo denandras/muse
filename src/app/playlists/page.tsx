@@ -20,8 +20,8 @@ interface SpotifyPlaylist {
   name: string;
   uri: string;
   images: Array<{ url: string }>;
-  owner: { id: string; display_name: string | null };
-  tracks: { total: number };
+  owner: { id: string; display_name: string | null } | null;
+  tracks: { total: number } | null;
   public: boolean;
   description: string | null;
 }
@@ -100,9 +100,11 @@ export default function PlaylistsPage() {
         return;
       }
 
-      const list = Array.isArray(payload)
+      const rawList = Array.isArray(payload)
         ? (payload as SpotifyPlaylist[])
         : (obj.playlists as SpotifyPlaylist[] | undefined) ?? [];
+      // Ensure it's actually an array — API could return null/undefined
+      const list = Array.isArray(rawList) ? rawList : [];
       setPlaylists(list);
       if (obj.error && !obj.playlists) {
         setError(String(obj.error));
@@ -179,7 +181,7 @@ export default function PlaylistsPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
-      <p className="text-sm text-white/50 max-w-2xl">
+      <p className="text-sm text-cream/50 max-w-2xl">
         Import tracks from your Spotify playlists into Muse. Optionally assign
         genres and moods to all imported tracks at once.
       </p>
@@ -187,11 +189,11 @@ export default function PlaylistsPage() {
       {loading ? (
         <PlaylistsSkeleton />
       ) : error ? (
-        <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-4 py-4 text-sm text-amber-200 flex items-start gap-3">
+        <div className="rounded-xl bg-warning/10 border border-warning/30 px-4 py-4 text-sm text-warning-light flex items-start gap-3">
           <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <div className="font-medium mb-0.5">Couldn&apos;t load playlists</div>
-            <div className="text-amber-200/80 mb-3">
+            <div className="text-warning-light/80 mb-3">
               {error}
             </div>
             <div className="flex items-center gap-2">
@@ -201,14 +203,14 @@ export default function PlaylistsPage() {
                   setLoading(true);
                   void load();
                 }}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/[0.08] text-white/80 text-sm hover:bg-white/[0.12] transition-colors"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-cream/[0.08] text-cream/80 text-sm hover:bg-cream/[0.12] transition-colors"
               >
                 <RefreshCw size={14} />
                 Retry
               </button>
               <a
                 href="/api/spotify/auth"
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#1DB954] text-black text-sm font-medium hover:bg-[#1ed760] transition-colors"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-spotify text-base text-sm font-medium hover:bg-spotify-hover transition-colors"
               >
                 Reconnect Spotify
               </a>
@@ -216,7 +218,7 @@ export default function PlaylistsPage() {
           </div>
         </div>
       ) : playlists.length === 0 ? (
-        <div className="text-center py-16 text-sm text-white/30 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+        <div className="text-center py-16 text-sm text-cream/30 rounded-xl bg-cream/[0.02] border border-cream/[0.04]">
           No playlists found. Make sure your Spotify account has playlists.
         </div>
       ) : (
@@ -224,18 +226,18 @@ export default function PlaylistsPage() {
           {playlists.map((pl) => (
             <div
               key={pl.id}
-              className="rounded-xl bg-white/[0.02] border border-white/[0.04] overflow-hidden"
+              className="rounded-xl bg-cream/[0.02] border border-cream/[0.04] overflow-hidden"
             >
               {/* Playlist row */}
               <div
-                className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-white/[0.04] transition-colors"
+                className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-cream/[0.04] transition-colors"
                 onClick={() => {
                   setExpandedId(expandedId === pl.id ? null : pl.id);
                   setSelectedGenres([]);
                   setSelectedMoods([]);
                 }}
               >
-                <button className="text-white/40 flex-shrink-0">
+                <button className="text-cream/40 flex-shrink-0">
                   {expandedId === pl.id ? (
                     <ChevronDown size={14} />
                   ) : (
@@ -244,7 +246,7 @@ export default function PlaylistsPage() {
                 </button>
 
                 {/* Cover */}
-                <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-white/[0.06]">
+                <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
                   {pl.images?.[0]?.url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -254,25 +256,25 @@ export default function PlaylistsPage() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <Music size={18} className="text-white/20" />
+                      <Music size={18} className="text-cream/20" />
                     </div>
                   )}
                 </div>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-white/90 truncate">
+                  <div className="text-sm font-medium text-cream/90 truncate">
                     {pl.name}
                   </div>
-                  <div className="text-xs text-white/40 truncate">
-                    {pl.tracks.total} tracks
-                    {pl.owner.display_name ? ` · by ${pl.owner.display_name}` : ""}
+                  <div className="text-xs text-cream/40 truncate">
+                    {pl.tracks?.total ?? 0} tracks
+                    {pl.owner?.display_name ? ` · by ${pl.owner.display_name}` : ""}
                     {pl.public ? "" : " · Private"}
                   </div>
                 </div>
 
                 {pl.description && (
-                  <div className="hidden sm:block text-xs text-white/30 truncate max-w-xs">
+                  <div className="hidden sm:block text-xs text-cream/30 truncate max-w-xs">
                     {pl.description}
                   </div>
                 )}
@@ -291,12 +293,12 @@ export default function PlaylistsPage() {
                     <div className="px-3 pb-3 pt-1 flex flex-col gap-3">
                       {/* Genre selection */}
                       <div>
-                        <div className="text-xs text-white/50 mb-1.5">
+                        <div className="text-xs text-cream/50 mb-1.5">
                           Assign genres (optional)
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {flatGenres.length === 0 ? (
-                            <span className="text-xs text-white/30">
+                            <span className="text-xs text-cream/30">
                               No genres yet — create some on the Genres page
                             </span>
                           ) : (
@@ -306,8 +308,8 @@ export default function PlaylistsPage() {
                                 onClick={() => toggleGenre(g.id)}
                                 className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-lg text-xs transition-colors ${
                                   selectedGenres.includes(g.id)
-                                    ? "bg-violet-500/20 text-violet-200 border border-violet-500/40"
-                                    : "bg-white/[0.04] text-white/50 border border-white/[0.06] hover:bg-white/[0.08]"
+                                    ? "bg-primary/20 text-primary-light border border-primary/40"
+                                    : "bg-cream/[0.04] text-cream/50 border border-cream/[0.06] hover:bg-cream/[0.08]"
                                 }`}
                               >
                                 {selectedGenres.includes(g.id) && (
@@ -322,12 +324,12 @@ export default function PlaylistsPage() {
 
                       {/* Mood selection */}
                       <div>
-                        <div className="text-xs text-white/50 mb-1.5">
+                        <div className="text-xs text-cream/50 mb-1.5">
                           Assign moods (optional)
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {moods.length === 0 ? (
-                            <span className="text-xs text-white/30">
+                            <span className="text-xs text-cream/30">
                               No moods yet — create some on the Moods page
                             </span>
                           ) : (
@@ -337,8 +339,8 @@ export default function PlaylistsPage() {
                                 onClick={() => toggleMood(m.id)}
                                 className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-lg text-xs transition-colors ${
                                   selectedMoods.includes(m.id)
-                                    ? "bg-rose-500/20 text-rose-200 border border-rose-500/40"
-                                    : "bg-white/[0.04] text-white/50 border border-white/[0.06] hover:bg-white/[0.08]"
+                                    ? "bg-secondary/20 text-secondary-light border border-secondary/40"
+                                    : "bg-cream/[0.04] text-cream/50 border border-cream/[0.06] hover:bg-cream/[0.08]"
                                 }`}
                               >
                                 {selectedMoods.includes(m.id) && (
@@ -362,7 +364,7 @@ export default function PlaylistsPage() {
                         <button
                           onClick={() => handleImport(pl.id)}
                           disabled={importing === pl.id}
-                          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-green-500/20 text-green-200 border border-green-500/30 text-sm hover:bg-green-500/30 transition-colors disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-success/20 text-success-light border border-success/30 text-sm hover:bg-success/30 transition-colors disabled:opacity-50"
                         >
                           {importing === pl.id ? (
                             <>
@@ -372,7 +374,7 @@ export default function PlaylistsPage() {
                           ) : (
                             <>
                               <Download size={14} />
-                              Import {pl.tracks.total} tracks
+                              Import {pl.tracks?.total ?? 0} tracks
                             </>
                           )}
                         </button>
@@ -382,7 +384,7 @@ export default function PlaylistsPage() {
                             setSelectedGenres([]);
                             setSelectedMoods([]);
                           }}
-                          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white/[0.04] text-white/50 border border-white/[0.06] text-sm hover:bg-white/[0.08] transition-colors"
+                          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cream/[0.04] text-cream/50 border border-cream/[0.06] text-sm hover:bg-cream/[0.08] transition-colors"
                         >
                           <X size={14} />
                           Cancel
@@ -404,7 +406,7 @@ export default function PlaylistsPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl glass-strong text-sm text-white/90 border border-white/10 shadow-lg"
+            className="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl glass-strong text-sm text-cream/90 border border-cream/10 shadow-lg"
           >
             {toast}
           </motion.div>
@@ -420,13 +422,13 @@ function PlaylistsSkeleton() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl bg-white/[0.02] border border-white/[0.04] px-3 py-3 flex items-center gap-3 animate-pulse"
+          className="rounded-xl bg-cream/[0.02] border border-cream/[0.04] px-3 py-3 flex items-center gap-3 animate-pulse"
         >
-          <div className="w-3.5 h-3.5 rounded bg-white/[0.06]" />
-          <div className="w-12 h-12 rounded-lg bg-white/[0.06]" />
+          <div className="w-3.5 h-3.5 rounded bg-cream/[0.06]" />
+          <div className="w-12 h-12 rounded-lg bg-cream/[0.06]" />
           <div className="flex-1 flex flex-col gap-1.5">
-            <div className="h-3 w-1/3 rounded bg-white/[0.06]" />
-            <div className="h-2.5 w-1/4 rounded bg-white/[0.04]" />
+            <div className="h-3 w-1/3 rounded bg-cream/[0.06]" />
+            <div className="h-2.5 w-1/4 rounded bg-cream/[0.04]" />
           </div>
         </div>
       ))}

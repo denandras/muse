@@ -1,8 +1,9 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Music2, Lock } from "lucide-react";
 import type { Metadata } from "next";
 import { supabaseServer } from "@/lib/supabase-server";
+import type { Track, Album, Genre, Mood } from "@/lib/types";
+import MusicSection from "./MusicSection";
 
 interface ProfileData {
   user: {
@@ -14,6 +15,8 @@ interface ProfileData {
   genres: { id: string; name: string; track_count: number }[];
   moods: { id: string; name: string; color: string | null; track_count: number }[];
   totals: { tracks: number; albums: number };
+  tracks: Track[];
+  albums: Album[];
 }
 
 async function getProfileData(userId: string): Promise<ProfileData | null> {
@@ -78,6 +81,74 @@ async function getProfileData(userId: string): Promise<ProfileData | null> {
       .filter((m) => m.track_count > 0)
       .sort((a, b) => b.track_count - a.track_count);
 
+    // Fetch tracks with genre/mood joins (paginated to bypass 1000-row cap)
+    const trackFields =
+      "id, spotify_id, spotify_uri, title, artist, album_title, album_spotify_id, album_cover_url, duration_ms, track_number, disc_number, is_liked, is_favorite, stars, musical_key, added_at, updated_at, track_genres(genre_id, genres(id, name, parent_id, depth, sort_order)), track_moods(mood_id, moods(id, name, color, sort_order))";
+    const allTrackRows: Record<string, unknown>[] = [];
+    let trackOffset = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data: trackPage } = await supabaseServer
+        .from("tracks")
+        .select(trackFields)
+        .eq("user_id", user.id)
+        .order("added_at", { ascending: false })
+        .range(trackOffset, trackOffset + 999);
+      if (!trackPage || trackPage.length === 0) break;
+      allTrackRows.push(...trackPage);
+      if (trackPage.length < 1000) break;
+      trackOffset += 1000;
+    }
+
+    const tracks: Track[] = allTrackRows.map((t: Record<string, unknown>) => {
+      const { track_genres, track_moods, ...rest } = t;
+      return {
+        ...(rest as unknown as Track),
+        genres:
+          (track_genres as Array<{ genres: Record<string, unknown> }> | null)?.map(
+            (g) => g.genres as unknown as Genre
+          ) ?? [],
+        moods:
+          (track_moods as Array<{ moods: Record<string, unknown> }> | null)?.map(
+            (m) => m.moods as unknown as Mood
+          ) ?? [],
+      };
+    });
+
+    // Fetch albums with genre/mood joins (paginated to bypass 1000-row cap)
+    const albumFields =
+      "id, spotify_id, spotify_uri, title, artist, cover_url, release_date, album_type, stars, notes, is_favorite, added_at, updated_at, album_genres(genre_id, genres(id, name, parent_id, depth, sort_order)), album_moods(mood_id, moods(id, name, color, sort_order))";
+    const allAlbumRows: Record<string, unknown>[] = [];
+    let albumOffset = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data: albumPage } = await supabaseServer
+        .from("albums")
+        .select(albumFields)
+        .eq("user_id", user.id)
+        .order("added_at", { ascending: false })
+        .range(albumOffset, albumOffset + 999);
+      if (!albumPage || albumPage.length === 0) break;
+      allAlbumRows.push(...albumPage);
+      if (albumPage.length < 1000) break;
+      albumOffset += 1000;
+    }
+
+    const albums: Album[] = allAlbumRows.map((a: Record<string, unknown>) => {
+      const { album_genres, album_moods, ...rest } = a;
+      return {
+        ...(rest as unknown as Album),
+        genres:
+          (album_genres as Array<{ genres: Record<string, unknown> }> | null)?.map(
+            (g) => g.genres as unknown as Genre
+          ) ?? [],
+        moods:
+          (album_moods as Array<{ moods: Record<string, unknown> }> | null)?.map(
+            (m) => m.moods as unknown as Mood
+          ) ?? [],
+      };
+    });
+
     return {
       user: {
         id: user.id,
@@ -88,6 +159,8 @@ async function getProfileData(userId: string): Promise<ProfileData | null> {
       genres,
       moods,
       totals,
+      tracks,
+      albums,
     };
   } catch {
     return null;
@@ -122,15 +195,15 @@ export default async function PublicProfilePage({
     return (
       <div className="max-w-2xl mx-auto p-6 sm:p-10 flex flex-col items-center gap-4 text-center">
         <div className="w-14 h-14 rounded-2xl glass flex items-center justify-center">
-          <Lock className="text-white/50" size={22} />
+          <Lock className="text-cream/50" size={22} />
         </div>
-        <h1 className="text-lg font-semibold text-white/90">Private profile</h1>
-        <p className="text-sm text-white/40 max-w-sm">
+        <h1 className="text-lg font-semibold text-cream/90">Private profile</h1>
+        <p className="text-sm text-cream/40 max-w-sm">
           This user hasn’t enabled public profile sharing.
         </p>
         <Link
           href="/"
-          className="text-sm text-white/60 hover:text-white/90 underline underline-offset-4"
+          className="text-sm text-cream/60 hover:text-cream/90 underline underline-offset-4"
         >
           Back to Muse
         </Link>
@@ -138,7 +211,7 @@ export default async function PublicProfilePage({
     );
   }
 
-  const { user, genres, moods, totals } = data;
+  const { user, genres, moods, totals, tracks, albums } = data;
 
   return (
     <div className="max-w-3xl mx-auto p-4 sm:p-6 flex flex-col gap-6">
@@ -151,15 +224,15 @@ export default async function PublicProfilePage({
             className="w-16 h-16 rounded-full object-cover"
           />
         ) : (
-          <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-            <Music2 size={22} className="text-white/60" />
+          <div className="w-16 h-16 rounded-full bg-cream/10 flex items-center justify-center">
+            <Music2 size={22} className="text-cream/60" />
           </div>
         )}
         <div>
-          <h1 className="text-xl font-semibold text-white/90">
+          <h1 className="text-xl font-semibold text-cream/90">
             {user.display_name || "Muse user"}
           </h1>
-          <div className="text-xs text-white/40 mt-0.5">
+          <div className="text-xs text-cream/40 mt-0.5">
             {totals.tracks} tracks · {totals.albums} albums · {genres.length}{" "}
             genres · {moods.length} moods
           </div>
@@ -167,20 +240,20 @@ export default async function PublicProfilePage({
       </div>
 
       <section className="rounded-2xl glass p-5">
-        <h2 className="text-xs uppercase tracking-wide text-white/40 mb-3">
+        <h2 className="text-xs uppercase tracking-wide text-cream/40 mb-3">
           Genres
         </h2>
         {genres.length === 0 ? (
-          <p className="text-sm text-white/30">No genres.</p>
+          <p className="text-sm text-cream/30">No genres.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {genres.map((g) => (
               <span
                 key={g.id}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.06] text-xs text-white/70"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cream/[0.06] text-xs text-cream/70"
               >
                 {g.name}
-                <span className="text-white/30">{g.track_count}</span>
+                <span className="text-cream/30">{g.track_count}</span>
               </span>
             ))}
           </div>
@@ -188,15 +261,15 @@ export default async function PublicProfilePage({
       </section>
 
       <section className="rounded-2xl glass p-5">
-        <h2 className="text-xs uppercase tracking-wide text-white/40 mb-3">
+        <h2 className="text-xs uppercase tracking-wide text-cream/40 mb-3">
           Moods
         </h2>
         {moods.length === 0 ? (
-          <p className="text-sm text-white/30">No moods.</p>
+          <p className="text-sm text-cream/30">No moods.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {moods.map((m) => {
-              const color = m.color || "#888888";
+              const color = m.color || "var(--mood-fallback)";
               return (
                 <span
                   key={m.id}
@@ -220,7 +293,9 @@ export default async function PublicProfilePage({
         )}
       </section>
 
-      <p className="text-xs text-white/30 text-center">
+      <MusicSection tracks={tracks} albums={albums} />
+
+      <p className="text-xs text-cream/30 text-center">
         Read-only public profile · Powered by Muse
       </p>
     </div>
