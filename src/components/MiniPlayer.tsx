@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Play,
@@ -9,7 +9,6 @@ import {
   SkipForward,
   Volume2,
   VolumeX,
-  Heart,
   Music,
   Sparkles,
 } from "lucide-react";
@@ -27,7 +26,6 @@ export default function MiniPlayer() {
     currentTrackTitle,
     currentTrackArtist,
     currentTrackAlbumArt,
-    currentTrackId,
     isPlaying,
     isPremium,
     spotifyConnected,
@@ -45,13 +43,6 @@ export default function MiniPlayer() {
 
   const [volume, setVolumeState] = useState(0.5);
   const [muted, setMuted] = useState(false);
-  // Local "liked" status for the currently-playing track — the MiniPlayer
-  // doesn't have the full Track record, so this is a soft hint driven by the
-  // user pressing the heart here. The authoritative per-track button lives
-  // in TrackRow.
-  const [likedHint, setLikedHint] = useState(true);
-  const [removing, setRemoving] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
 
   const hasTrack = currentTrackTitle !== null;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -85,31 +76,6 @@ export default function MiniPlayer() {
     } else {
       setVolume(0);
       setMuted(true);
-    }
-  };
-
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
-  }, []);
-
-  const handleRemoveFromLiked = async () => {
-    if (!currentTrackId) return;
-    setRemoving(true);
-    try {
-      const res = await fetch(
-        `/api/spotify/remove-from-liked?track_id=${encodeURIComponent(currentTrackId)}`,
-        { method: "DELETE" }
-      );
-      if (res.ok) {
-        setLikedHint(false);
-        showToast("Removed from Liked Songs");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        showToast(data.error || "Failed to remove from liked");
-      }
-    } finally {
-      setRemoving(false);
     }
   };
 
@@ -193,19 +159,6 @@ export default function MiniPlayer() {
                 </button>
               </div>
 
-              {/* Remove from liked (only if it's currently liked) */}
-              {likedHint && currentTrackId && (
-                <button
-                  onClick={handleRemoveFromLiked}
-                  disabled={removing}
-                  className="hidden sm:flex w-8 h-8 items-center justify-center rounded-lg text-secondary hover:text-secondary-hover hover:bg-secondary/10 transition-colors disabled:opacity-50"
-                  aria-label="Remove from Liked Songs"
-                  title="Remove from Liked Songs"
-                >
-                  <Heart size={15} className="fill-secondary" />
-                </button>
-              )}
-
               {/* Volume (desktop only) */}
               <div className="hidden lg:flex items-center gap-1.5 flex-shrink-0">
                 <button
@@ -262,20 +215,6 @@ export default function MiniPlayer() {
               )}
             </div>
           </div>
-
-          {/* Toast */}
-          <AnimatePresence>
-            {toast && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="fixed bottom-36 md:bottom-24 left-1/2 -translate-x-1/2 rounded-xl glass-strong px-4 py-2 text-sm text-cream/90"
-              >
-                {toast}
-              </motion.div>
-            )}
-          </AnimatePresence>
         </motion.div>
       )}
     </AnimatePresence>
