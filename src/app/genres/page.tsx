@@ -97,7 +97,12 @@ export default function GenresPage() {
           load();
         }}
         onDelete={async (id) => {
-          await fetch(`/api/genres/${id}`, { method: "DELETE" });
+          const res = await fetch(`/api/genres/${id}`, { method: "DELETE" });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            console.error("Failed to delete genre:", res.status, err);
+            alert(`Failed to delete genre: ${err.error ?? res.statusText}`);
+          }
           load();
         }}
       />
