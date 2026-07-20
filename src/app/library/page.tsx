@@ -834,7 +834,7 @@ export default function LibraryPage() {
                 ) : (
                   <TrackRow
                     track={item.track}
-                    displayNumber={safeUnifiedPage * PAGE_SIZE + i + 1}
+                    displayNumber={view === "tracks" ? safeUnifiedPage * PAGE_SIZE + i + 1 : undefined}
                     showLikedBadge={false}
                     queueTracks={pagedItems
                       .filter((p) => p.kind === "track")
