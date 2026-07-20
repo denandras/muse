@@ -129,7 +129,24 @@ function sortUnified(
 }
 
 // --- Pagination ----------------------------------------------------------
-const PAGE_SIZE = 50;
+// Desktop (sm breakpoint and up) shows 50 items per page; mobile shows 20
+// to avoid excessive scrolling on small screens.
+const DESKTOP_PAGE_SIZE = 50;
+const MOBILE_PAGE_SIZE = 20;
+
+/** Returns true when the viewport is >= the Tailwind `sm` breakpoint (640px). */
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(
+    typeof window !== "undefined" ? window.innerWidth >= 640 : true
+  );
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 640px)");
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+  return isDesktop;
+}
 
 export default function LibraryPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -150,6 +167,9 @@ export default function LibraryPage() {
     sort: "added_at",
     sortDirection: "desc",
   });
+
+  const isDesktop = useIsDesktop();
+  const pageSize = isDesktop ? DESKTOP_PAGE_SIZE : MOBILE_PAGE_SIZE;
 
   // Single pagination state for the unified list.
   const [unifiedPage, setUnifiedPage] = useState(0);
@@ -237,11 +257,12 @@ export default function LibraryPage() {
     []
   );
 
-  // Reset pagination to first page whenever filters or view change so the
-  // user always lands on a non-empty page.
+  // Reset pagination to first page whenever filters, view, or page size
+  // change so the user always lands on a non-empty page. Page size changes
+  // when the viewport crosses the sm breakpoint (desktop <-> mobile).
   useEffect(() => {
     setUnifiedPage(0);
-  }, [filters, view]);
+  }, [filters, view, pageSize]);
 
   // Derive include/exclude sets from the tri-state genre filter.
   // When a parent genre is included/excluded, all its descendants are
@@ -410,15 +431,15 @@ export default function LibraryPage() {
 
   // Paginate the unified list. Only the current page slice is rendered,
   // which keeps filter toggles instant even with 1700+ items.
-  const unifiedPageCount = Math.max(1, Math.ceil(unifiedList.length / PAGE_SIZE));
+  const unifiedPageCount = Math.max(1, Math.ceil(unifiedList.length / pageSize));
   const safeUnifiedPage = Math.min(unifiedPage, unifiedPageCount - 1);
   const pagedItems = useMemo(
     () =>
       unifiedList.slice(
-        safeUnifiedPage * PAGE_SIZE,
-        safeUnifiedPage * PAGE_SIZE + PAGE_SIZE
+        safeUnifiedPage * pageSize,
+        safeUnifiedPage * pageSize + pageSize
       ),
-    [unifiedList, safeUnifiedPage]
+    [unifiedList, safeUnifiedPage, pageSize]
   );
 
   // Tracks grouped by album spotify id (for album expansion).
@@ -834,7 +855,7 @@ export default function LibraryPage() {
                 ) : (
                   <TrackRow
                     track={item.track}
-                    displayNumber={view === "tracks" ? safeUnifiedPage * PAGE_SIZE + i + 1 : undefined}
+                    displayNumber={view === "tracks" ? safeUnifiedPage * pageSize + i + 1 : undefined}
                     showLikedBadge={false}
                     queueTracks={pagedItems
                       .filter((p) => p.kind === "track")
@@ -854,7 +875,7 @@ export default function LibraryPage() {
             page={safeUnifiedPage}
             pageCount={unifiedPageCount}
             total={unifiedList.length}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
             onChange={setUnifiedPage}
           />
         )}
