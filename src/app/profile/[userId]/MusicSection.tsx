@@ -116,7 +116,7 @@ export default function MusicSection({ tracks, albums }: MusicSectionProps) {
                   key={`album-${album.id}`}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-cream/[0.02] border border-cream/[0.04]"
                 >
-                  <span className="w-5 flex-shrink-0 text-right text-xs text-white/30 tabular-nums select-none">
+                  <span className="w-5 flex-shrink-0 text-right text-xs text-cream/30 tabular-nums select-none">
                     {displayNumber}
                   </span>
                   <div className="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
@@ -129,25 +129,25 @@ export default function MusicSection({ tracks, albums }: MusicSectionProps) {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Disc3 size={14} className="text-white/20" />
+                        <Disc3 size={14} className="text-cream/20" />
                       </div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white/90 truncate">
+                    <div className="text-sm font-medium text-cream/90 truncate">
                       {album.title}
                     </div>
-                    <div className="text-xs text-white/40 truncate">
+                    <div className="text-xs text-cream/40 truncate">
                       {album.artist}
                       {album.release_date ? ` · ${album.release_date.slice(0, 4)}` : ""}
                       {album.album_type ? ` · ${album.album_type}` : ""}
                     </div>
                   </div>
                   {album.is_favorite && (
-                    <Heart size={12} className="text-rose-400 fill-secondary flex-shrink-0" />
+                    <Heart size={12} className="text-secondary fill-secondary flex-shrink-0" />
                   )}
                   {album.stars != null && album.stars > 0 && (
-                    <span className="text-xs text-white/40 flex-shrink-0">
+                    <span className="text-xs text-accent flex-shrink-0">
                       {"★".repeat(album.stars)}
                     </span>
                   )}
@@ -160,42 +160,42 @@ export default function MusicSection({ tracks, albums }: MusicSectionProps) {
                 key={`track-${track.id}`}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-cream/[0.02] border border-cream/[0.04]"
               >
-                <span className="w-5 flex-shrink-0 text-right text-xs text-white/30 tabular-nums select-none">
-                  {displayNumber}
-                </span>
-                <div className="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
-                  {track.album_cover_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={track.album_cover_url}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Music size={14} className="text-white/20" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-medium text-white/90 truncate">
-                      {track.title}
-                    </span>
-                    {track.is_liked && (
-                      <Heart size={10} className="text-green-400 fill-success flex-shrink-0" />
+                <span className="w-5 flex-shrink-0 text-right text-xs text-cream/30 tabular-nums select-none">
+                    {displayNumber}
+                  </span>
+                  <div className="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
+                    {track.album_cover_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={track.album_cover_url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Music size={14} className="text-cream/20" />
+                      </div>
                     )}
                   </div>
-                  <div className="text-xs text-white/40 truncate">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-medium text-cream/90 truncate">
+                        {track.title}
+                      </span>
+                      {track.is_liked && (
+                        <Heart size={10} className="text-success fill-success flex-shrink-0" />
+                      )}
+                    </div>
+                    <div className="text-xs text-cream/40 truncate">
                     {track.artist}
                     {track.album_title ? ` · ${track.album_title}` : ""}
                   </div>
                 </div>
                 {track.is_favorite && (
-                  <Heart size={12} className="text-rose-400 fill-secondary flex-shrink-0" />
+                  <Heart size={12} className="text-secondary fill-secondary flex-shrink-0" />
                 )}
                 {track.stars != null && track.stars > 0 && (
-                  <span className="text-xs text-white/40 flex-shrink-0">
+                  <span className="text-xs text-accent flex-shrink-0">
                     {"★".repeat(track.stars)}
                   </span>
                 )}
@@ -215,9 +215,9 @@ export default function MusicSection({ tracks, albums }: MusicSectionProps) {
             className="w-8 h-8 rounded-lg flex items-center justify-center bg-cream/[0.04] hover:bg-cream/[0.08] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Previous page"
           >
-            <ChevronLeft size={14} className="text-white/60" />
+            <ChevronLeft size={14} className="text-cream/60" />
           </button>
-          <span className="text-xs text-white/40 tabular-nums">
+          <span className="text-xs text-cream/40 tabular-nums">
             {page + 1} / {totalPages}
           </span>
           <button
@@ -227,7 +227,7 @@ export default function MusicSection({ tracks, albums }: MusicSectionProps) {
             className="w-8 h-8 rounded-lg flex items-center justify-center bg-cream/[0.04] hover:bg-cream/[0.08] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Next page"
           >
-            <ChevronRight size={14} className="text-white/60" />
+            <ChevronRight size={14} className="text-cream/60" />
           </button>
         </div>
       )}

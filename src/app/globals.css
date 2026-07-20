@@ -1,23 +1,92 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════
+   Organic Palette — Design Tokens
+   Earthy neutrals, soft greens, warm browns, muted clay tones.
+   All component colors reference these tokens; no hard-coded hex
+   values appear in component styles.
+   ═══════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --background: #0a0a0a;
-  --foreground: #ffffff;
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.06);
+  /* Base — warm dark earth (app background) */
+  --base: #181614;
+
+  /* Cream — warm off-white; base for all text, surface, and border overlays.
+     Used with opacity modifiers: text-cream/90, bg-cream/[0.04], etc. */
+  --cream: #f5f0e8;
+
+  /* Panel — warm dark surface for dropdowns and floating panels */
+  --panel: #1e1b18;
+
+  /* Mood fallback — warm gray for moods without a user-chosen color */
+  --mood-fallback: #8a8378;
+
+  /* Primary — sage green (genres, primary actions) */
+  --primary: #8ba888;
+  --primary-hover: #a9c4a5;
+
+  /* Secondary — muted clay (favorites, moods, secondary actions) */
+  --secondary: #c47a5e;
+  --secondary-hover: #d69478;
+
+  /* Accent — warm amber/gold (star ratings, highlights) */
+  --accent: #d4a857;
+  --accent-light: #e8c87a;
+
+  /* Success — muted organic green (liked badge, success states) */
+  --success: #7ba876;
+  --success-light: #a5c8a2;
+
+  /* Warning — muted ochre (session warnings, non-premium banner) */
+  --warning: #c4944e;
+  --warning-light: #e8c478;
+
+  /* Danger — muted terracotta (errors, delete actions) */
+  --danger: #b85c4e;
+  --danger-light: #d88884;
+
+  /* Spotify — muted organic green for Spotify brand actions */
+  --spotify: #5fa85f;
+  --spotify-hover: #6fc06f;
+
+  /* Overlay — modal backdrop base (used with opacity: bg-overlay/60) */
+  --overlay: #000000;
+
+  /* Glass surfaces */
+  --glass-bg: rgba(245, 240, 232, 0.03);
+  --glass-border: rgba(245, 240, 232, 0.06);
 }
 
+/* Map tokens to Tailwind utility names (bg-*, text-*, border-*, etc.) */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-base: var(--base);
+  --color-cream: var(--cream);
+  --color-panel: var(--panel);
+  --color-mood-fallback: var(--mood-fallback);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-danger: var(--danger);
+  --color-danger-light: var(--danger-light);
+  --color-spotify: var(--spotify);
+  --color-spotify-hover: var(--spotify-hover);
+  --color-overlay: var(--overlay);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--base);
+  color: var(--cream);
 }
 
-/* Glass panel base — translucent, blurred, matches audio-tracker aesthetic */
+/* Glass panel base — translucent, blurred, warm-tinted */
 .glass {
   background: var(--glass-bg);
   backdrop-filter: blur(20px) saturate(180%);
@@ -26,10 +95,10 @@ body {
 }
 
 .glass-strong {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(245, 240, 232, 0.05);
   backdrop-filter: blur(30px) saturate(180%);
   -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(245, 240, 232, 0.08);
 }
 
 /* iOS: prevent input zoom — inputs must be at least 16px */
@@ -48,9 +117,9 @@ textarea {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(245, 240, 232, 0.1);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(245, 240, 232, 0.2);
 }

@@ -71,7 +71,7 @@ export default function AlbumRow({
   return (
     <motion.div
       layout
-      className="rounded-xl bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.04] transition-colors"
+      className="rounded-xl bg-cream/[0.02] hover:bg-cream/[0.04] border border-cream/[0.04] transition-colors"
     >
       {/* Album header */}
       <div
@@ -83,7 +83,7 @@ export default function AlbumRow({
           {canExpand && (
             <button
               type="button"
-              className="text-white/40 hover:text-white/80 transition-colors"
+              className="text-cream/40 hover:text-cream/80 transition-colors"
               aria-label={expanded ? "Collapse album" : "Expand album"}
             >
               {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -92,7 +92,7 @@ export default function AlbumRow({
         </div>
 
         {/* Cover */}
-        <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-white/[0.06]">
+        <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
           {album.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -102,7 +102,7 @@ export default function AlbumRow({
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <Disc3 size={18} className="text-white/20" />
+              <Disc3 size={18} className="text-cream/20" />
             </div>
           )}
         </div>
@@ -116,7 +116,7 @@ export default function AlbumRow({
                 e.stopPropagation();
                 onOpenAlbumDetail?.();
               }}
-              className="text-sm font-medium text-white/90 truncate text-left hover:underline"
+              className="text-sm font-medium text-cream/90 truncate text-left hover:underline"
             >
               {album.title}
             </button>
@@ -127,14 +127,14 @@ export default function AlbumRow({
                   e.stopPropagation();
                   onOpenAlbumDetail();
                 }}
-                className="text-white/20 hover:text-white/70 transition-colors opacity-0 group-hover:opacity-100"
+                className="text-cream/20 hover:text-cream/70 transition-colors opacity-0 group-hover:opacity-100"
                 title="Edit album details"
               >
                 <Pencil size={11} />
               </button>
             )}
           </div>
-          <div className="text-xs text-white/40 truncate">
+          <div className="text-xs text-cream/40 truncate">
             {album.artist}
             {album.release_date ? ` · ${album.release_date.slice(0, 4)}` : ""}
             {canExpand ? ` · ${tracks.length} tracks` : ""}
@@ -155,10 +155,10 @@ export default function AlbumRow({
         <button
           type="button"
           onClick={playAlbum}
-          className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center bg-white/[0.06] hover:bg-white/[0.12] transition-colors"
+          className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center bg-cream/[0.06] hover:bg-cream/[0.12] transition-colors"
           aria-label="Play album"
         >
-          <Play size={14} className="text-white/70 ml-0.5" />
+          <Play size={14} className="text-cream/70 ml-0.5" />
         </button>
 
         <FavoriteToggle
@@ -191,14 +191,14 @@ export default function AlbumRow({
               ) : null}
 
               {album.notes && (
-                <div className="text-xs text-white/50 italic px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.04] mb-1">
+                <div className="text-xs text-cream/50 italic px-3 py-2 rounded-lg bg-cream/[0.03] border border-cream/[0.04] mb-1">
                   “{album.notes}”
                 </div>
               )}
 
               {/* Tracks inside the album */}
               {tracks.length === 0 ? (
-                <div className="text-xs text-white/30 px-3 py-3">
+                <div className="text-xs text-cream/30 px-3 py-3">
                   No imported tracks for this album.
                 </div>
               ) : (

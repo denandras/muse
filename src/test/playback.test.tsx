@@ -51,6 +51,8 @@ describe('PlaybackProvider', () => {
     expect(screen.getByTestId('current-track').textContent).toBe('none')
     expect(screen.getByTestId('current-artist').textContent).toBe('none')
     expect(screen.getByTestId('current-art').textContent).toBe('none')
+    expect(screen.getByTestId('queue-length').textContent).toBe('0')
+    expect(screen.getByTestId('queue-index').textContent).toBe('0')
   })
 
   it('throws when usePlayback is used outside provider', () => {

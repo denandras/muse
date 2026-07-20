@@ -278,7 +278,7 @@ export default function SyncButton({
         <button
           onClick={runSync}
           disabled={running}
-          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-xl bg-white/[0.06] text-white/80 text-sm hover:bg-white/[0.1] transition-colors disabled:opacity-60 flex-shrink-0 min-w-[72px]"
+          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-xl bg-cream/[0.06] text-cream/80 text-sm hover:bg-cream/[0.1] transition-colors disabled:opacity-60 flex-shrink-0 min-w-[72px]"
           title="Import from Spotify"
         >
           {running ? (
@@ -296,12 +296,12 @@ export default function SyncButton({
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -8 }}
-              className="hidden md:flex items-center gap-2 text-xs text-white/50"
+              className="hidden md:flex items-center gap-2 text-xs text-cream/50"
             >
               <span>{progressLabel}</span>
               <button
                 onClick={cancel}
-                className="text-white/30 hover:text-white/70"
+                className="text-cream/30 hover:text-cream/70"
                 aria-label="Cancel sync"
               >
                 <X size={12} />
@@ -326,7 +326,7 @@ export default function SyncButton({
         <button
           onClick={runSync}
           disabled={running}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#1DB954] text-black font-medium text-sm hover:bg-[#1ed760] transition-colors disabled:opacity-60"
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-spotify text-base font-medium text-sm hover:bg-spotify-hover transition-colors disabled:opacity-60"
         >
           {running ? (
             <RefreshCw size={16} className="animate-spin" />
@@ -338,14 +338,14 @@ export default function SyncButton({
         {running && (
           <button
             onClick={cancel}
-            className="text-sm text-white/50 hover:text-white/80"
+            className="text-sm text-cream/50 hover:text-cream/80"
           >
             Cancel
           </button>
         )}
       </div>
       {running && progressLabel && (
-        <div className="text-sm text-white/60">{progressLabel}</div>
+        <div className="text-sm text-cream/60">{progressLabel}</div>
       )}
       <SyncProgressBar progress={progress} onCancel={cancel} />
       <SyncToast result={result} error={error} onDismiss={dismissResult} />
@@ -384,20 +384,20 @@ function SyncProgressBar({
       >
         <div className="mx-auto max-w-3xl px-4 pt-2">
           <div className="glass-strong rounded-xl px-3 py-2.5 flex items-center gap-3 pointer-events-auto">
-            <RefreshCw size={14} className="animate-spin text-yellow-400 flex-shrink-0" />
+            <RefreshCw size={14} className="animate-spin text-accent flex-shrink-0" />
             <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-              <span className="text-xs text-white/70 truncate">
+              <span className="text-xs text-cream/70 truncate">
                 {progress.label}
               </span>
               {counter && (
-                <span className="text-xs tabular-nums text-yellow-300 font-medium flex-shrink-0">
+                <span className="text-xs tabular-nums text-accent-light font-medium flex-shrink-0">
                   {counter}
                 </span>
               )}
             </div>
             <button
               onClick={onCancel}
-              className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
+              className="text-cream/30 hover:text-cream/70 transition-colors flex-shrink-0"
               aria-label="Cancel sync"
             >
               <X size={14} />
@@ -424,11 +424,11 @@ function SyncToast({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
-        className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl glass-strong px-4 py-3 text-sm text-rose-300 flex items-start gap-2 max-w-sm"
+        className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl glass-strong px-4 py-3 text-sm text-secondary-hover flex items-start gap-2 max-w-sm"
       >
         <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
         <span className="flex-1 min-w-0">{error}</span>
-        <button onClick={onDismiss} className="flex-shrink-0 text-white/40 hover:text-white/80 mt-0.5">
+        <button onClick={onDismiss} className="flex-shrink-0 text-cream/40 hover:text-cream/80 mt-0.5">
           <X size={14} />
         </button>
       </motion.div>
@@ -445,9 +445,9 @@ function SyncToast({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl glass-strong px-4 py-2.5 text-sm text-white/90 flex items-center gap-2"
+      className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl glass-strong px-4 py-2.5 text-sm text-cream/90 flex items-center gap-2"
     >
-      <CheckCircle2 size={16} className="text-green-400" />
+      <CheckCircle2 size={16} className="text-success" />
       <span>
         {newTracks === 0 && result.albumsImported === 0
           ? "Already up to date"
@@ -458,7 +458,7 @@ function SyncToast({
             }`}
         {note}
       </span>
-      <button onClick={onDismiss} className="ml-2 text-white/40 hover:text-white/80">
+      <button onClick={onDismiss} className="ml-2 text-cream/40 hover:text-cream/80">
         <X size={14} />
       </button>
     </motion.div>

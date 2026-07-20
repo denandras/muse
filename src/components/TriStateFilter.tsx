@@ -98,8 +98,8 @@ export default function TriStateFilter({
         onClick={() => setOpen((o) => !o)}
         className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border text-sm transition-colors cursor-pointer ${
           activeCount > 0
-            ? "bg-violet-500/15 border-violet-500/30 text-violet-300"
-            : "bg-white/[0.04] border-white/[0.06] text-white/60 hover:text-white/80"
+            ? "bg-primary/15 border-primary/30 text-primary-hover"
+            : "bg-cream/[0.04] border-cream/[0.06] text-cream/60 hover:text-cream/80"
         }`}
         aria-expanded={open}
       >
@@ -112,7 +112,7 @@ export default function TriStateFilter({
             role="button"
             tabIndex={-1}
             onClick={clearAll}
-            className="ml-0.5 -mr-1 w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 text-white/40 hover:text-white/80"
+            className="ml-0.5 -mr-1 w-4 h-4 flex items-center justify-center rounded hover:bg-cream/10 text-cream/40 hover:text-cream/80"
             title="Clear filters"
           >
             <span className="text-xs">×</span>
@@ -120,15 +120,15 @@ export default function TriStateFilter({
         )}
         <ChevronDown
           size={14}
-          className={`text-white/30 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`text-cream/30 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute z-50 mt-1.5 left-0 min-w-[220px] max-w-[320px] max-h-[340px] overflow-y-auto rounded-xl border border-white/10 bg-[#1a1a1f]/95 backdrop-blur-xl shadow-2xl py-1.5">
+        <div className="absolute z-50 mt-1.5 left-0 min-w-[220px] max-w-[320px] max-h-[340px] overflow-y-auto rounded-xl border border-cream/10 bg-panel/95 backdrop-blur-xl shadow-2xl py-1.5">
           {items.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-white/30">
+            <div className="px-3 py-2 text-xs text-cream/30">
               No {label.toLowerCase()} available
             </div>
           ) : (
@@ -139,17 +139,17 @@ export default function TriStateFilter({
                   key={item.id}
                   type="button"
                   onClick={() => handleClick(item.id)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-white/70 hover:bg-white/[0.06] transition-colors cursor-pointer text-left"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-cream/70 hover:bg-cream/[0.06] transition-colors cursor-pointer text-left"
                   style={{ paddingLeft: `${12 + item.depth * 16}px` }}
                 >
                   {/* Tri-state visual indicator */}
                   <span
                     className={`flex items-center justify-center w-4 h-4 rounded border transition-colors flex-shrink-0 ${
                       state === "include"
-                        ? "bg-violet-500/80 border-violet-400 text-white"
+                        ? "bg-primary/80 border-primary-hover text-cream"
                         : state === "exclude"
-                        ? "bg-rose-500/80 border-rose-400 text-white"
-                        : "bg-transparent border-white/20 text-transparent"
+                        ? "bg-secondary/80 border-secondary-hover text-cream"
+                        : "bg-transparent border-cream/20 text-transparent"
                     }`}
                   >
                     {state === "include" && <Plus size={10} strokeWidth={3} />}
@@ -162,11 +162,11 @@ export default function TriStateFilter({
           )}
           {/* Footer: clear all */}
           {activeCount > 0 && (
-            <div className="sticky bottom-0 mt-1 pt-1.5 pb-1 px-2 border-t border-white/[0.06] bg-[#1a1a1f]/95">
+            <div className="sticky bottom-0 mt-1 pt-1.5 pb-1 px-2 border-t border-cream/[0.06] bg-panel/95">
               <button
                 type="button"
                 onClick={() => onChange({})}
-                className="w-full text-center text-xs text-white/40 hover:text-white/70 py-1 transition-colors"
+                className="w-full text-center text-xs text-cream/40 hover:text-cream/70 py-1 transition-colors"
               >
                 Clear all
               </button>

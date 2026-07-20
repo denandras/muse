@@ -115,11 +115,11 @@ export default function MiniPlayer() {
                      bottom-16 md:bottom-0 md:pb-3"
         >
           <div className="mx-auto max-w-3xl">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.05] backdrop-blur-xl px-3 py-2.5">
+            <div className="rounded-2xl border border-cream/10 bg-cream/[0.05] backdrop-blur-xl px-3 py-2.5">
               {/* Controls row */}
               <div className="flex items-center gap-3">
               {/* Album art */}
-              <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-white/[0.06]">
+              <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
                 {currentTrackAlbumArt ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -129,17 +129,17 @@ export default function MiniPlayer() {
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <Music size={16} className="text-white/30" />
+                    <Music size={16} className="text-cream/30" />
                   </div>
                 )}
               </div>
 
               {/* Track info */}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-white/90">
+                <p className="truncate text-sm font-medium text-cream/90">
                   {currentTrackTitle}
                 </p>
-                <p className="truncate text-xs text-white/50">
+                <p className="truncate text-xs text-cream/50">
                   {currentTrackArtist ?? "—"}
                 </p>
               </div>
@@ -149,7 +149,7 @@ export default function MiniPlayer() {
                 <button
                   onClick={previous}
                   disabled={!isPremium}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-cream/60 hover:text-cream hover:bg-cream/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label="Previous"
                 >
                   <SkipBack size={16} />
@@ -157,7 +157,7 @@ export default function MiniPlayer() {
                 <button
                   onClick={() => (isPlaying ? pause() : resume())}
                   disabled={!isPremium}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black transition hover:scale-105 disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream text-base transition hover:scale-105 disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label={isPlaying ? "Pause" : "Play"}
                 >
                   {isPlaying ? (
@@ -169,7 +169,7 @@ export default function MiniPlayer() {
                 <button
                   onClick={next}
                   disabled={!isPremium}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-cream/60 hover:text-cream hover:bg-cream/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label="Next"
                 >
                   <SkipForward size={16} />
@@ -181,11 +181,11 @@ export default function MiniPlayer() {
                 <button
                   onClick={handleRemoveFromLiked}
                   disabled={removing}
-                  className="hidden sm:flex w-8 h-8 items-center justify-center rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                  className="hidden sm:flex w-8 h-8 items-center justify-center rounded-lg text-secondary hover:text-secondary-hover hover:bg-secondary/10 transition-colors disabled:opacity-50"
                   aria-label="Remove from Liked Songs"
                   title="Remove from Liked Songs"
                 >
-                  <Heart size={15} className="fill-rose-400" />
+                  <Heart size={15} className="fill-secondary" />
                 </button>
               )}
 
@@ -193,7 +193,7 @@ export default function MiniPlayer() {
               <div className="hidden lg:flex items-center gap-1.5 flex-shrink-0">
                 <button
                   onClick={toggleMute}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-cream/50 hover:text-cream transition-colors"
                   aria-label={muted ? "Unmute" : "Mute"}
                 >
                   {muted || volume === 0 ? (
@@ -208,7 +208,7 @@ export default function MiniPlayer() {
                   max={100}
                   value={muted ? 0 : Math.round(volume * 100)}
                   onChange={handleVolume}
-                  className="w-20 accent-white/70"
+                  className="w-20 accent-cream/70"
                   aria-label="Volume"
                 />
               </div>
@@ -216,26 +216,26 @@ export default function MiniPlayer() {
 
               {/* Seek bar + time (inside blurred container) */}
               <div className="mt-2 flex items-center gap-2 px-1">
-                <span className="text-[10px] tabular-nums text-white/40 w-9 text-right">
+                <span className="text-[10px] tabular-nums text-cream/40 w-9 text-right">
                   {formatTime(currentTime)}
                 </span>
                 <div
                   onClick={handleSeek}
-                  className="group relative flex-1 h-1.5 cursor-pointer rounded-full bg-white/10"
+                  className="group relative flex-1 h-1.5 cursor-pointer rounded-full bg-cream/10"
                 >
                   <div
-                    className="absolute left-0 top-0 h-full rounded-full bg-white/70 transition-[width] duration-150 group-hover:bg-white"
+                    className="absolute left-0 top-0 h-full rounded-full bg-cream/70 transition-[width] duration-150 group-hover:bg-cream"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <span className="text-[10px] tabular-nums text-white/40 w-9">
+                <span className="text-[10px] tabular-nums text-cream/40 w-9">
                   {formatTime(duration)}
                 </span>
               </div>
 
               {/* Non-Premium banner */}
               {!isPremium && spotifyConnected && (
-                <div className="mt-2 flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200">
+                <div className="mt-2 flex items-center gap-2 rounded-xl bg-warning/10 border border-warning/30 px-3 py-2 text-xs text-warning-light">
                   <Sparkles size={14} className="flex-shrink-0" />
                   <span>
                     Spotify Premium is required for playback. You can still
@@ -253,7 +253,7 @@ export default function MiniPlayer() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="fixed bottom-36 md:bottom-24 left-1/2 -translate-x-1/2 rounded-xl glass-strong px-4 py-2 text-sm text-white/90"
+                className="fixed bottom-36 md:bottom-24 left-1/2 -translate-x-1/2 rounded-xl glass-strong px-4 py-2 text-sm text-cream/90"
               >
                 {toast}
               </motion.div>

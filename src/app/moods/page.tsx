@@ -12,15 +12,15 @@ import {
 import type { Mood } from "@/lib/types";
 
 const DEFAULT_COLORS = [
-  "#ef4444",
-  "#f97316",
-  "#eab308",
-  "#22c55e",
-  "#06b6d4",
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
-  "#64748b",
+  "#b85c4e",
+  "#c47a5e",
+  "#d4a857",
+  "#7ba876",
+  "#5e9da3",
+  "#6b8aad",
+  "#8ba888",
+  "#c4944e",
+  "#8a8378",
 ];
 
 export default function MoodsPage() {
@@ -48,10 +48,10 @@ export default function MoodsPage() {
     <div className="max-w-4xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
       {/* Header: title + plus icon */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-medium text-white/90">Moods</h1>
+        <h1 className="text-lg font-medium text-cream/90">Moods</h1>
         <button
           onClick={() => setModal({ kind: "create" })}
-          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/[0.06] text-white/70 hover:bg-white/[0.12] transition-colors"
+          className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-cream/[0.06] text-cream/70 hover:bg-cream/[0.12] transition-colors"
           title="New mood"
         >
           <Plus size={18} />
@@ -60,10 +60,10 @@ export default function MoodsPage() {
 
       {loading ? (
         <div className="flex items-center justify-center p-12">
-          <Loader2 className="animate-spin text-white/40" size={24} />
+          <Loader2 className="animate-spin text-cream/40" size={24} />
         </div>
       ) : moods.length === 0 ? (
-        <div className="text-center py-16 text-sm text-white/30 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+        <div className="text-center py-16 text-sm text-cream/30 rounded-xl bg-cream/[0.02] border border-cream/[0.04]">
           No moods yet. Click + to create moods like Running, Studying, or Chill.
         </div>
       ) : (
@@ -72,7 +72,7 @@ export default function MoodsPage() {
             <motion.div
               key={m.id}
               layout
-              className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-white/[0.04] group"
+              className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-cream/[0.04] group"
             >
               {/* Color dot */}
               {m.color ? (
@@ -81,25 +81,25 @@ export default function MoodsPage() {
                   style={{ backgroundColor: m.color }}
                 />
               ) : (
-                <span className="w-3 h-3 rounded-full bg-white/20 flex-shrink-0" />
+                <span className="w-3 h-3 rounded-full bg-cream/20 flex-shrink-0" />
               )}
-              <span className="text-sm text-white/90 flex-1">{m.name}</span>
+              <span className="text-sm text-cream/90 flex-1">{m.name}</span>
               {typeof m.track_count === "number" && (
-                <span className="text-xs text-white/30">
+                <span className="text-xs text-cream/30">
                   {m.track_count} tracks
                 </span>
               )}
               <div className="flex items-center gap-1 opacity-60 sm:opacity-40 sm:hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => setModal({ kind: "rename", mood: m })}
-                  className="w-7 h-7 rounded-md hover:bg-white/10 text-white/50 hover:text-white/90 flex items-center justify-center transition-colors"
+                  className="w-7 h-7 rounded-md hover:bg-cream/10 text-cream/50 hover:text-cream/90 flex items-center justify-center transition-colors"
                   title="Edit"
                 >
                   <Pencil size={13} />
                 </button>
                 <button
                   onClick={() => setModal({ kind: "delete", mood: m })}
-                  className="w-7 h-7 rounded-md hover:bg-rose-500/15 text-white/50 hover:text-rose-300 flex items-center justify-center transition-colors"
+                  className="w-7 h-7 rounded-md hover:bg-secondary/15 text-cream/50 hover:text-secondary-hover flex items-center justify-center transition-colors"
                   title="Delete"
                 >
                   <Trash2 size={13} />
@@ -189,7 +189,7 @@ function MoodModals({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        className="fixed inset-0 z-50 bg-overlay/60 backdrop-blur-sm flex items-center justify-center p-4"
         onClick={onClose}
       >
         <motion.div
@@ -200,38 +200,38 @@ function MoodModals({
           className="max-w-md w-full rounded-2xl glass-strong p-5 flex flex-col gap-4"
         >
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-white/90">
+            <h3 className="text-base font-semibold text-cream/90">
               {modal.kind === "create"
                 ? "Create mood"
                 : modal.kind === "rename"
                 ? "Edit mood"
                 : "Delete mood"}
             </h3>
-            <button onClick={onClose} className="text-white/40 hover:text-white/80">
+            <button onClick={onClose} className="text-cream/40 hover:text-cream/80">
               <X size={18} />
             </button>
           </div>
 
           {modal.kind === "delete" ? (
-            <p className="text-sm text-white/60">
-              Delete <span className="text-white/90">{modal.mood.name}</span>?
+            <p className="text-sm text-cream/60">
+              Delete <span className="text-cream/90">{modal.mood.name}</span>?
               Associations are removed. This cannot be undone.
             </p>
           ) : (
             <>
               <label className="flex flex-col gap-1.5">
-                <span className="text-xs text-white/50">Name</span>
+                <span className="text-xs text-cream/50">Name</span>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   autoFocus
                   placeholder="e.g. Running"
-                  className="h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20"
+                  className="h-10 px-3 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/90 placeholder:text-cream/30 focus:outline-none focus:border-cream/20"
                 />
               </label>
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs text-white/50">Color</span>
+                <span className="text-xs text-cream/50">Color</span>
                 <div className="flex flex-wrap items-center gap-2">
                   {DEFAULT_COLORS.map((c) => (
                     <button
@@ -239,29 +239,29 @@ function MoodModals({
                       type="button"
                       onClick={() => setColor(c)}
                       className={`w-7 h-7 rounded-full transition-transform ${
-                        color === c ? "ring-2 ring-white/80 scale-110" : ""
+                        color === c ? "ring-2 ring-cream/80 scale-110" : ""
                       }`}
                       style={{ backgroundColor: c }}
                       aria-label={`Color ${c}`}
                     />
                   ))}
-                  <label className="relative w-7 h-7 rounded-full overflow-hidden border border-white/20 cursor-pointer">
+                  <label className="relative w-7 h-7 rounded-full overflow-hidden border border-cream/20 cursor-pointer">
                     <input
                       type="color"
-                      value={color ?? "#888888"}
+                      value={color ?? "var(--mood-fallback)"}
                       onChange={(e) => setColor(e.target.value)}
                       className="absolute inset-0 opacity-0 cursor-pointer"
                     />
                     <span
                       className="absolute inset-0"
-                      style={{ backgroundColor: color ?? "#888888" }}
+                      style={{ backgroundColor: color ?? "var(--mood-fallback)" }}
                     />
                   </label>
                   {color && (
                     <button
                       type="button"
                       onClick={() => setColor(null)}
-                      className="text-xs text-white/40 hover:text-white/70"
+                      className="text-xs text-cream/40 hover:text-cream/70"
                     >
                       Clear
                     </button>
@@ -274,7 +274,7 @@ function MoodModals({
           <div className="flex justify-end gap-2 pt-1">
             <button
               onClick={onClose}
-              className="h-9 px-4 rounded-xl bg-white/[0.06] text-white/70 text-sm hover:bg-white/[0.1] transition-colors"
+              className="h-9 px-4 rounded-xl bg-cream/[0.06] text-cream/70 text-sm hover:bg-cream/[0.1] transition-colors"
             >
               Cancel
             </button>
@@ -283,8 +283,8 @@ function MoodModals({
               disabled={busy || (modal.kind !== "delete" && !name.trim())}
               className={`h-9 px-4 rounded-xl text-sm transition-colors disabled:opacity-50 ${
                 modal.kind === "delete"
-                  ? "bg-rose-500 text-white hover:bg-rose-400"
-                  : "bg-pink-500 text-white hover:bg-pink-400"
+                  ? "bg-secondary text-cream hover:bg-secondary-hover"
+                  : "bg-secondary text-cream hover:bg-secondary-hover"
               }`}
             >
               {busy

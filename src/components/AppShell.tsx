@@ -62,15 +62,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <ReconnectBanner show={showReconnect} />
 
       {/* Sidebar nav (desktop) */}
-      <aside className="hidden md:flex flex-col w-56 flex-shrink-0 border-r border-white/[0.06] bg-white/[0.02] p-4 gap-1">
+      <aside className="hidden md:flex flex-col w-56 flex-shrink-0 border-r border-cream/[0.06] bg-cream/[0.02] p-4 gap-1">
         {NAV_ITEMS.map((item) => (
           <NavLink key={item.href} {...item} active={pathname === item.href} />
         ))}
-        <div className="mt-auto pt-4 border-t border-white/[0.06]">
+        <div className="mt-auto pt-4 border-t border-cream/[0.06]">
           {user && (
             <Link
               href="/settings"
-              className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-cream/5 transition-colors"
             >
               {user.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -80,15 +80,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   className="w-8 h-8 rounded-full object-cover"
                 />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/30 to-rose-500/30 flex items-center justify-center text-xs text-white/70">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-secondary/30 flex items-center justify-center text-xs text-cream/70">
                   <Music2 size={14} />
                 </div>
               )}
               <div className="min-w-0">
-                <div className="text-sm text-white/90 truncate">
+                <div className="text-sm text-cream/90 truncate">
                   {user.display_name || user.spotify_id || "User"}
                 </div>
-                <div className="text-xs text-white/40 truncate">
+                <div className="text-xs text-cream/40 truncate">
                   {user.spotify_product === "premium" ? "Premium" : "Free"}
                 </div>
               </div>
@@ -98,7 +98,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 glass-strong border-t border-white/[0.08] flex items-center justify-around px-2 py-1.5">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 glass-strong border-t border-cream/[0.08] flex items-center justify-around px-2 py-1.5">
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href;
           const Icon = item.icon;
@@ -107,7 +107,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               key={item.href}
               href={item.href}
               className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] transition-colors flex-1 ${
-                active ? "text-white" : "text-white/40"
+                active ? "text-cream" : "text-cream/40"
               }`}
             >
               <Icon size={18} />
@@ -152,8 +152,8 @@ function NavLink({
       href={href}
       className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors ${
         active
-          ? "bg-white/[0.08] text-white"
-          : "text-white/50 hover:text-white/90 hover:bg-white/5"
+          ? "bg-cream/[0.08] text-cream"
+          : "text-cream/50 hover:text-cream/90 hover:bg-cream/5"
       }`}
     >
       <Icon size={16} />

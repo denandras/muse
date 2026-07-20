@@ -88,20 +88,20 @@ export default function TrackRow({
   return (
     <motion.div
       layout
-      className="group rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.04] transition-colors"
+      className="group rounded-xl bg-cream/[0.02] hover:bg-cream/[0.05] border border-cream/[0.04] transition-colors"
       style={{ marginLeft: indent * 24 }}
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
         {/* Display number (1-based, context-dependent — see docblock above) */}
         {displayNumber != null && (
-          <span className="w-5 flex-shrink-0 text-right text-xs text-white/30 tabular-nums select-none">
+          <span className="w-5 flex-shrink-0 text-right text-xs text-cream/30 tabular-nums select-none">
             {displayNumber}
           </span>
         )}
 
         {/* Album cover thumbnail */}
         {showAlbumCover && (
-          <div className="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden bg-white/[0.06]">
+          <div className="w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
             {track.album_cover_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -111,7 +111,7 @@ export default function TrackRow({
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <Music size={14} className="text-white/20" />
+                <Music size={14} className="text-cream/20" />
               </div>
             )}
           </div>
@@ -127,15 +127,15 @@ export default function TrackRow({
                 onOpenDetail?.();
               }}
               className={`text-sm font-medium truncate text-left hover:underline min-w-0 ${
-                isCurrent ? "text-green-400" : "text-white/90"
+                isCurrent ? "text-success" : "text-cream/90"
               } ${readOnly ? "cursor-default hover:no-underline" : ""}`}
               disabled={readOnly && !onOpenDetail}
             >
               {track.title}
             </button>
             {track.is_liked && showLikedBadge && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] text-green-400/80 font-medium flex-shrink-0">
-                <Check size={11} className="text-green-400" strokeWidth={2.5} />
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-success/80 font-medium flex-shrink-0">
+                <Check size={11} className="text-success" strokeWidth={2.5} />
               </span>
             )}
             {!readOnly && onOpenDetail && (
@@ -145,14 +145,14 @@ export default function TrackRow({
                   e.stopPropagation();
                   onOpenDetail();
                 }}
-                className="text-white/20 hover:text-white/70 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                className="text-cream/20 hover:text-cream/70 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
                 title="Edit details"
               >
                 <Pencil size={11} />
               </button>
             )}
           </div>
-          <div className="text-xs text-white/40 truncate">
+          <div className="text-xs text-cream/40 truncate">
             {track.artist}
             {track.album_title ? ` · ${track.album_title}` : ""}
           </div>
@@ -170,7 +170,7 @@ export default function TrackRow({
 
         {/* Musical key */}
         {track.musical_key && (
-          <span className="hidden sm:inline-flex text-[11px] text-white/40 font-mono px-2 py-0.5 rounded bg-white/[0.04] flex-shrink-0">
+          <span className="hidden sm:inline-flex text-[11px] text-cream/40 font-mono px-2 py-0.5 rounded bg-cream/[0.04] flex-shrink-0">
             {track.musical_key}
           </span>
         )}
@@ -188,13 +188,13 @@ export default function TrackRow({
         <button
           type="button"
           onClick={handlePlay}
-          className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center bg-white/[0.06] hover:bg-white/[0.12] transition-colors"
+          className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center bg-cream/[0.06] hover:bg-cream/[0.12] transition-colors"
           aria-label={isPlayingThis ? "Pause" : "Play"}
         >
           {isPlayingThis ? (
-            <Pause size={14} className="text-white" />
+            <Pause size={14} className="text-cream" />
           ) : (
-            <Play size={14} className="text-white/70 ml-0.5" />
+            <Play size={14} className="text-cream/70 ml-0.5" />
           )}
         </button>
       </div>

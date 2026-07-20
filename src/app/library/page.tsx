@@ -623,7 +623,7 @@ export default function LibraryPage() {
   if (loading && tracks.length === 0 && albums.length === 0) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="animate-spin text-white/40" size={24} />
+        <Loader2 className="animate-spin text-cream/40" size={24} />
       </div>
     );
   }
@@ -631,7 +631,7 @@ export default function LibraryPage() {
   if (error && tracks.length === 0 && albums.length === 0) {
     return (
       <div className="p-6">
-        <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 px-4 py-3 text-sm text-rose-300">
+        <div className="rounded-xl bg-secondary/10 border border-secondary/30 px-4 py-3 text-sm text-secondary-hover">
           Failed to load library: {error}
         </div>
       </div>
@@ -650,20 +650,20 @@ export default function LibraryPage() {
         <div className="relative flex-1 min-w-0">
           <Search
             size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-cream/30 pointer-events-none"
           />
           <input
             type="search"
             value={filters.search}
             onChange={(e) => updateFilters({ search: e.target.value })}
             placeholder="Search…"
-            className="w-full h-9 pl-9 pr-9 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full h-9 pl-9 pr-9 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/90 placeholder:text-cream/30 focus:outline-none focus:border-cream/20 transition-colors"
           />
           {filters.search && (
             <button
               type="button"
               onClick={() => updateFilters({ search: "" })}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-cream/30 hover:text-cream/70 transition-colors"
               aria-label="Clear search"
             >
               <X size={15} />
@@ -676,11 +676,11 @@ export default function LibraryPage() {
           type="button"
           onClick={playAllVisible}
           disabled={pagedTracks.length === 0 && pagedAlbums.length === 0}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-sm text-white/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cream/[0.06] hover:bg-cream/[0.12] text-sm text-cream/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
           aria-label="Play all visible"
           title="Play all visible items in order"
         >
-          <Play size={14} className="text-white/70" fill="currentColor" />
+          <Play size={14} className="text-cream/70" fill="currentColor" />
           <span className="hidden sm:inline">Play all</span>
         </button>
       </div>
@@ -693,7 +693,7 @@ export default function LibraryPage() {
       />
 
       {/* Summary */}
-      <div className="flex items-center gap-4 text-xs text-white/40">
+      <div className="flex items-center gap-4 text-xs text-cream/40">
         <span>{filteredTracks.length} tracks</span>
         <span>{filteredAlbums.length} albums</span>
       </div>
@@ -862,7 +862,7 @@ function Pagination({
   const from = page * pageSize + 1;
   const to = Math.min(total, (page + 1) * pageSize);
   return (
-    <div className="flex items-center justify-between gap-3 py-2 text-xs text-white/50">
+    <div className="flex items-center justify-between gap-3 py-2 text-xs text-cream/50">
       <span>
         {from}–{to} of {total}
       </span>
@@ -870,7 +870,7 @@ function Pagination({
         <button
           onClick={() => onChange(Math.max(0, page - 1))}
           disabled={page === 0}
-          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-cream/[0.04] border border-cream/[0.06] hover:bg-cream/[0.08] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Previous page"
         >
           <ChevronLeft size={14} />
@@ -881,7 +881,7 @@ function Pagination({
         <button
           onClick={() => onChange(Math.min(pageCount - 1, page + 1))}
           disabled={page >= pageCount - 1}
-          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-cream/[0.04] border border-cream/[0.06] hover:bg-cream/[0.08] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Next page"
         >
           <ChevronRight size={14} />
@@ -893,7 +893,7 @@ function Pagination({
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="text-center py-10 text-sm text-white/30 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+    <div className="text-center py-10 text-sm text-cream/30 rounded-xl bg-cream/[0.02] border border-cream/[0.04]">
       {label}
     </div>
   );

@@ -189,7 +189,7 @@ export default function TrackDetailModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 pb-28"
+          className="fixed inset-0 z-[60] bg-overlay/70 backdrop-blur-sm flex items-center justify-center p-4 pb-28"
           onClick={() => !saving && onClose()}
         >
           <motion.div
@@ -201,8 +201,8 @@ export default function TrackDetailModal({
             className="max-w-lg w-full max-h-[85vh] overflow-y-auto rounded-2xl glass-strong flex flex-col"
           >
             {/* Header */}
-            <div className="flex items-start gap-3 p-5 border-b border-white/[0.06]">
-              <div className="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-white/[0.06]">
+            <div className="flex items-start gap-3 p-5 border-b border-cream/[0.06]">
+              <div className="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-cream/[0.06]">
                 {track.album_cover_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -212,25 +212,25 @@ export default function TrackDetailModal({
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <Music size={20} className="text-white/20" />
+                    <Music size={20} className="text-cream/20" />
                   </div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <Star size={14} className="text-white/30" />
-                  <span className="text-[10px] uppercase tracking-wide text-white/40">
+                  <Star size={14} className="text-cream/30" />
+                  <span className="text-[10px] uppercase tracking-wide text-cream/40">
                     Track details
                   </span>
                 </div>
-                <h3 className="text-base font-semibold text-white/90 truncate mt-0.5">
+                <h3 className="text-base font-semibold text-cream/90 truncate mt-0.5">
                   {track.title}
                 </h3>
-                <p className="text-xs text-white/40 truncate">{track.artist}</p>
+                <p className="text-xs text-cream/40 truncate">{track.artist}</p>
               </div>
               <button
                 onClick={() => !saving && onClose()}
-                className="text-white/40 hover:text-white/80 transition-colors flex-shrink-0"
+                className="text-cream/40 hover:text-cream/80 transition-colors flex-shrink-0"
               >
                 <X size={18} />
               </button>
@@ -241,14 +241,14 @@ export default function TrackDetailModal({
               {/* Title + Artist — static, not editable */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-xs text-white/50">Title</span>
-                  <div className="h-10 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-sm text-white/90 flex items-center">
+                  <span className="text-xs text-cream/50">Title</span>
+                  <div className="h-10 px-3 rounded-xl bg-cream/[0.02] border border-cream/[0.04] text-sm text-cream/90 flex items-center">
                     {title || "—"}
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-xs text-white/50">Artist</span>
-                  <div className="h-10 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-sm text-white/90 flex items-center">
+                  <span className="text-xs text-cream/50">Artist</span>
+                  <div className="h-10 px-3 rounded-xl bg-cream/[0.02] border border-cream/[0.04] text-sm text-cream/90 flex items-center">
                     {artist || "—"}
                   </div>
                 </div>
@@ -257,13 +257,13 @@ export default function TrackDetailModal({
               {/* Album + Musical Key */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-xs text-white/50">Album</span>
-                  <div className="h-10 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-sm text-white/90 flex items-center">
+                  <span className="text-xs text-cream/50">Album</span>
+                  <div className="h-10 px-3 rounded-xl bg-cream/[0.02] border border-cream/[0.04] text-sm text-cream/90 flex items-center">
                     {albumTitle || "—"}
                   </div>
                 </div>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-white/50 flex items-center gap-1">
+                  <span className="text-xs text-cream/50 flex items-center gap-1">
                     <KeyIcon size={11} /> Musical key
                   </span>
                   <div className="flex gap-2">
@@ -273,7 +273,7 @@ export default function TrackDetailModal({
                       onChange={(e) => { setMusicalKey(e.target.value); setDirty(true); }}
                       placeholder="e.g. Cm"
                       list="musical-keys"
-                      className="h-10 flex-1 px-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+                      className="h-10 flex-1 px-3 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/90 placeholder:text-cream/20 focus:outline-none focus:border-cream/20 transition-colors"
                     />
                     <datalist id="musical-keys">
                       {MUSICAL_KEYS.map((k) => (
@@ -285,22 +285,22 @@ export default function TrackDetailModal({
               </div>
 
               {/* Favorite (left) + Rating (right) */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-cream/[0.02] border border-cream/[0.04]">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-white/50">Favorite</span>
+                  <span className="text-xs text-cream/50">Favorite</span>
                   <FavoriteToggle
                     isFavorite={isFavorite}
                     onChange={(v) => { setIsFavorite(v); setDirty(true); }}
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <Star size={14} className="text-yellow-400/60" />
-                  <span className="text-xs text-white/50">Rating</span>
+                  <Star size={14} className="text-accent/60" />
+                  <span className="text-xs text-cream/50">Rating</span>
                   <StarRating value={stars} onChange={(v) => { setStars(v); setDirty(true); }} size={16} />
                   {stars !== null && (
                     <button
                       onClick={() => { setStars(null); setDirty(true); }}
-                      className="text-xs text-white/30 hover:text-white/60 transition-colors"
+                      className="text-xs text-cream/30 hover:text-cream/60 transition-colors"
                     >
                       Clear
                     </button>
@@ -310,7 +310,7 @@ export default function TrackDetailModal({
 
               {/* Notes */}
               <label className="flex flex-col gap-1.5">
-                <span className="text-xs text-white/50 flex items-center gap-1">
+                <span className="text-xs text-cream/50 flex items-center gap-1">
                   <StickyNote size={11} /> Notes
                 </span>
                 <textarea
@@ -318,14 +318,14 @@ export default function TrackDetailModal({
                   onChange={(e) => { setNotes(e.target.value); setDirty(true); }}
                   placeholder="Personal notes about this track..."
                   rows={3}
-                  className="px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/90 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors resize-none"
+                  className="px-3 py-2 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/90 placeholder:text-cream/20 focus:outline-none focus:border-cream/20 transition-colors resize-none"
                 />
               </label>
 
               {/* Genres */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/50 flex items-center gap-1">
+                  <span className="text-xs text-cream/50 flex items-center gap-1">
                     <Tag size={11} /> Genres
                   </span>
                   <button
@@ -333,7 +333,7 @@ export default function TrackDetailModal({
                       setShowMoodPicker(false);
                       setShowGenrePicker((v) => !v);
                     }}
-                    className="inline-flex items-center gap-1 text-xs text-violet-300 hover:text-violet-200 transition-colors"
+                    className="inline-flex items-center gap-1 text-xs text-primary-hover hover:text-primary-light transition-colors"
                   >
                     <Plus size={12} />
                     {showGenrePicker ? "Done" : "Assign"}
@@ -341,17 +341,17 @@ export default function TrackDetailModal({
                 </div>
                 <div className="flex flex-wrap gap-1.5 min-h-[28px]">
                   {selectedGenres.length === 0 ? (
-                    <span className="text-xs text-white/30">No genres assigned</span>
+                    <span className="text-xs text-cream/30">No genres assigned</span>
                   ) : (
                     selectedGenres.map((g) => (
                       <span
                         key={g.id}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-violet-500/20 text-violet-200 border border-violet-400/30"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/20 text-primary-light border border-primary-hover/30"
                       >
                         {genrePath(g, genres)}
                         <button
                           onClick={() => toggleGenre(g.id)}
-                          className="hover:text-white transition-colors"
+                          className="hover:text-cream transition-colors"
                         >
                           <X size={10} />
                         </button>
@@ -368,9 +368,9 @@ export default function TrackDetailModal({
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="rounded-xl bg-white/[0.03] border border-white/[0.04] p-2 max-h-48 overflow-y-auto">
+                      <div className="rounded-xl bg-cream/[0.03] border border-cream/[0.04] p-2 max-h-48 overflow-y-auto">
                         {genreTree.length === 0 ? (
-                          <p className="text-xs text-white/30 p-2">
+                          <p className="text-xs text-cream/30 p-2">
                             No genres yet. Create some in the Genres page.
                           </p>
                         ) : (
@@ -393,7 +393,7 @@ export default function TrackDetailModal({
               {/* Moods */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/50 flex items-center gap-1">
+                  <span className="text-xs text-cream/50 flex items-center gap-1">
                     <Palette size={11} /> Moods
                   </span>
                   <button
@@ -401,7 +401,7 @@ export default function TrackDetailModal({
                       setShowGenrePicker(false);
                       setShowMoodPicker((v) => !v);
                     }}
-                    className="inline-flex items-center gap-1 text-xs text-pink-300 hover:text-pink-200 transition-colors"
+                    className="inline-flex items-center gap-1 text-xs text-secondary-hover hover:text-secondary-light transition-colors"
                   >
                     <Plus size={12} />
                     {showMoodPicker ? "Done" : "Assign"}
@@ -409,10 +409,10 @@ export default function TrackDetailModal({
                 </div>
                 <div className="flex flex-wrap gap-1.5 min-h-[28px]">
                   {selectedMoods.length === 0 ? (
-                    <span className="text-xs text-white/30">No moods assigned</span>
+                    <span className="text-xs text-cream/30">No moods assigned</span>
                   ) : (
                     selectedMoods.map((m) => {
-                      const color = m.color || "#888888";
+                      const color = m.color || "var(--mood-fallback)";
                       return (
                         <span
                           key={m.id}
@@ -430,7 +430,7 @@ export default function TrackDetailModal({
                           {m.name}
                           <button
                             onClick={() => toggleMood(m.id)}
-                            className="hover:text-white transition-colors"
+                            className="hover:text-cream transition-colors"
                           >
                             <X size={10} />
                           </button>
@@ -448,21 +448,21 @@ export default function TrackDetailModal({
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="rounded-xl bg-white/[0.03] border border-white/[0.04] p-2 max-h-48 overflow-y-auto flex flex-wrap gap-1.5">
+                      <div className="rounded-xl bg-cream/[0.03] border border-cream/[0.04] p-2 max-h-48 overflow-y-auto flex flex-wrap gap-1.5">
                         {moods.length === 0 ? (
-                          <p className="text-xs text-white/30 p-2">
+                          <p className="text-xs text-cream/30 p-2">
                             No moods yet. Create some in the Moods page.
                           </p>
                         ) : (
                           moods.map((m) => {
                             const selected = selectedMoodIds.has(m.id);
-                            const color = m.color || "#888888";
+                            const color = m.color || "var(--mood-fallback)";
                             return (
                               <button
                                 key={m.id}
                                 onClick={() => toggleMood(m.id)}
                                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                                  selected ? "ring-1 ring-white/40" : "opacity-60 hover:opacity-100"
+                                  selected ? "ring-1 ring-cream/40" : "opacity-60 hover:opacity-100"
                                 }`}
                                 style={{
                                   backgroundColor: `${color}22`,
@@ -495,8 +495,8 @@ export default function TrackDetailModal({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between gap-2 p-5 border-t border-white/[0.06]">
-              <span className="text-xs text-white/30">
+            <div className="flex items-center justify-between gap-2 p-5 border-t border-cream/[0.06]">
+              <span className="text-xs text-cream/30">
                 {dirty ? "Unsaved changes" : "All changes saved"}
               </span>
               <div className="flex gap-2">
@@ -504,7 +504,7 @@ export default function TrackDetailModal({
                   <button
                     onClick={handleDelete}
                     disabled={deleting || saving}
-                    className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-rose-500/15 text-rose-200 border border-rose-500/30 text-sm hover:bg-rose-500/25 transition-colors disabled:opacity-50 min-w-[90px]"
+                    className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-secondary/15 text-secondary-light border border-secondary/30 text-sm hover:bg-secondary/25 transition-colors disabled:opacity-50 min-w-[90px]"
                   >
                     {deleting ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -516,14 +516,14 @@ export default function TrackDetailModal({
                 )}
                 <button
                   onClick={() => !saving && onClose()}
-                  className="h-9 px-4 rounded-xl bg-white/[0.06] text-white/70 text-sm hover:bg-white/[0.1] transition-colors"
+                  className="h-9 px-4 rounded-xl bg-cream/[0.06] text-cream/70 text-sm hover:bg-cream/[0.1] transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-violet-500 text-white text-sm hover:bg-violet-400 transition-colors disabled:opacity-50 min-w-[90px]"
+                  className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl bg-primary text-cream text-sm hover:bg-primary-hover transition-colors disabled:opacity-50 min-w-[90px]"
                 >
                   {saving ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -559,7 +559,7 @@ function GenrePickerItem({
   return (
     <div>
       <div
-        className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-white/[0.04] cursor-pointer"
+        className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-cream/[0.04] cursor-pointer"
         style={{ paddingLeft: depth * 16 + 8 }}
         onClick={() => onToggle(genre.id)}
       >
@@ -568,20 +568,20 @@ function GenrePickerItem({
             e.stopPropagation();
             if (hasChildren) setOpen((v) => !v);
           }}
-          className="w-4 h-4 flex items-center justify-center text-white/30 flex-shrink-0"
+          className="w-4 h-4 flex items-center justify-center text-cream/30 flex-shrink-0"
         >
           {hasChildren ? (open ? "▾" : "▸") : ""}
         </button>
         <div
           className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-colors ${
             selected
-              ? "bg-violet-500 border-violet-400"
-              : "border-white/20"
+              ? "bg-primary border-primary-hover"
+              : "border-cream/20"
           }`}
         >
-          {selected && <Check size={10} className="text-white" />}
+          {selected && <Check size={10} className="text-cream" />}
         </div>
-        <span className={`text-sm ${selected ? "text-violet-200" : "text-white/70"}`}>
+        <span className={`text-sm ${selected ? "text-primary-light" : "text-cream/70"}`}>
           {genre.name}
         </span>
       </div>
@@ -604,11 +604,11 @@ function GenrePickerItem({
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-2 py-1.5 rounded-lg bg-white/[0.03]">
-      <div className="text-[10px] uppercase tracking-wide text-white/30">
+    <div className="px-2 py-1.5 rounded-lg bg-cream/[0.03]">
+      <div className="text-[10px] uppercase tracking-wide text-cream/30">
         {label}
       </div>
-      <div className="text-white/70">{value}</div>
+      <div className="text-cream/70">{value}</div>
     </div>
   );
 }

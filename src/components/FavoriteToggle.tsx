@@ -24,15 +24,15 @@ export default function FavoriteToggle({
       }}
       className={`transition-colors ${
         isFavorite
-          ? "text-rose-500 hover:text-rose-400"
-          : "text-white/30 hover:text-white/60"
+          ? "text-secondary hover:text-secondary"
+          : "text-cream/30 hover:text-cream/60"
       }`}
       aria-label={isFavorite ? "Unfavorite" : "Favorite"}
       aria-pressed={isFavorite}
     >
       <Heart
         size={size}
-        className={isFavorite ? "fill-rose-500" : ""}
+        className={isFavorite ? "fill-secondary" : ""}
         strokeWidth={1.5}
       />
     </motion.button>

@@ -28,13 +28,13 @@ export default function ViewModeSwitch({
             type="button"
             onClick={() => onChange(mode.value)}
             className={`relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              active ? "text-white" : "text-white/40 hover:text-white/70"
+              active ? "text-cream" : "text-cream/40 hover:text-cream/70"
             }`}
           >
             {active && (
               <motion.span
                 layoutId="viewmode-pill"
-                className="absolute inset-0 rounded-lg bg-white/[0.1]"
+                className="absolute inset-0 rounded-lg bg-cream/[0.1]"
                 transition={{ type: "spring", stiffness: 380, damping: 30 }}
               />
             )}

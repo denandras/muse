@@ -14,7 +14,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#0a0a0a",
+  themeColor: "#181614",
 };
 
 export default function RootLayout({
@@ -24,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full bg-[#0a0a0a] text-white">
+      <body className="min-h-full bg-base text-cream">
         <PlaybackProvider>
           <AppShell>{children}</AppShell>
           <MiniPlayer />

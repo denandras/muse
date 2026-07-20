@@ -20,6 +20,10 @@ interface PlaybackState {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  /** Number of tracks in the local play queue. */
+  queueLength: number;
+  /** Index of the currently playing track in the local queue (0-based). */
+  queueIndex: number;
   /** Whether the Spotify SDK is loaded and a player is connected */
   spotifyReady: boolean;
   /** Whether the user is connected to Spotify (has valid tokens) */
@@ -149,14 +153,35 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   // Track the Spotify URI currently loaded so we know if we need to switch tracks
   const currentSpotifyUriRef = useRef<string | null>(null);
 
-  // ── Album context ────────────────────────────────────────────────────────
-  // When the user clicks "play album", we store the ordered list of track URIs
-  // so we can auto-advance to the next track when the current one ends.
-  // When null, single-track mode: playback stops at the end of the track.
-  const albumTrackUrisRef = useRef<string[] | null>(null);
-  const albumTrackIndexRef = useRef<number>(0);
+  // ── Local play queue ──────────────────────────────────────────────────────
+  // A unified queue that serves both single-track and album/playlist playback.
+  // Every play action populates this queue. next/previous navigate it.
+  // Auto-advance at track end uses this queue too.
+  // When the queue has exactly 1 entry, next/previous are no-ops (single track).
+  interface QueueEntry {
+    id: string;
+    title?: string;
+    spotifyUri: string;
+  }
+  const queueRef = useRef<QueueEntry[]>([]);
+  const queueIndexRef = useRef<number>(0);
+  const [queueLength, setQueueLength] = useState(0);
+  const [queueIndex, setQueueIndex] = useState(0);
   // Ref to detect end-of-track inside the poll.
   const endedHandledRef = useRef<boolean>(false);
+
+  // ── Pending play request ────────────────────────────────────────────────
+  // When play() or playAlbum() is called before the Spotify player is ready
+  // (e.g. on first track selection after page load, or after the tab returns
+  // from background and the player's WebSocket died), we store the request
+  // here. When the player's "ready" event fires, we execute the pending
+  // request — so the user's first click actually starts playback instead
+  // of silently doing nothing (requiring a second click).
+  const pendingPlayRef = useRef<(() => void) | null>(null);
+
+  // Ref to initPlayer so the 404 handler in spotifyPlayTrack can call it
+  // without creating a circular dependency (spotifyPlayTrack has [] deps).
+  const initPlayerRef = useRef<(() => void) | null>(null);
 
   // ── Position polling for Spotify ─────────────────────────────────────────
   // The Spotify SDK only fires player_state_changed on state transitions
@@ -236,7 +261,9 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     if (!playRes.ok) {
       const text = await playRes.text();
       console.error("[Muse Playback] play API error:", playRes.status, text);
-      // 404 = device not found — the device may have gone stale. Re-init.
+      // 404 = device not found — the device may have gone stale (e.g. after
+      // the tab was in the background). Re-init immediately so the pending
+      // play request (if any) fires when the new player is ready.
       if (playRes.status === 404) {
         console.log("[Muse Playback] device 404 — trying to reconnect player");
         setSpotifyReady(false);
@@ -245,6 +272,8 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
           spotifyPlayerRef.current?.disconnect();
         } catch {}
         spotifyPlayerRef.current = null;
+        // Re-init the player immediately (if initPlayer is available)
+        initPlayerRef.current?.();
       }
       return;
     }
@@ -266,28 +295,27 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
 
       // ── End-of-track detection ──────────────────────────────────────────
       // When the position is within 0.4s of the duration, the track is ending.
-      // In single-track mode (no album context), stop playback at the end.
-      // In album mode, auto-advance to the next queued track.
+      // If there are more tracks in the queue, auto-advance to the next one.
+      // Otherwise stop playback at the end.
       const nearEnd = durSec > 0 && posSec >= durSec - 0.4;
       if (nearEnd && !endedHandledRef.current) {
         endedHandledRef.current = true;
-        const uris = albumTrackUrisRef.current;
-        const idx = albumTrackIndexRef.current;
-        if (uris && idx < uris.length - 1) {
-          // Album context: advance to next track
+        const queue = queueRef.current;
+        const idx = queueIndexRef.current;
+        if (queue.length > 1 && idx < queue.length - 1) {
+          // Advance to next track in the queue
           const nextIdx = idx + 1;
-          albumTrackIndexRef.current = nextIdx;
-          const nextUri = uris[nextIdx];
-          console.log("[Muse Playback] album auto-advance → track", nextIdx + 1);
-          spotifyPlayTrack(nextUri);
+          queueIndexRef.current = nextIdx;
+          setQueueIndex(nextIdx);
+          const nextEntry = queue[nextIdx];
+          console.log("[Muse Playback] auto-advance → track", nextIdx + 1);
+          spotifyPlayTrack(nextEntry.spotifyUri);
         } else {
-          // Single-track mode or last track of album: stop at the end
+          // Last track in queue or single-track mode: stop at the end
           console.log("[Muse Playback] reached end — stopping");
           stopSpotifyPositionPolling();
           setIsPlaying(false);
           setCurrentTime(durSec);
-          // Clear album context after the album finishes
-          albumTrackUrisRef.current = null;
         }
       }
       // Reset the ended flag when a new track starts (position drops near 0)
@@ -379,6 +407,16 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
           spotifyDeviceIdRef.current = event.device_id;
           setSpotifyReady(true);
           setAuthError(false);
+          // Execute any pending play request that was queued while the
+          // player wasn't ready (e.g. user clicked play while the player
+          // was reconnecting after returning from background).
+          const pending = pendingPlayRef.current;
+          if (pending) {
+            pendingPlayRef.current = null;
+            console.log("[Muse Playback] executing pending play request");
+            // Small delay to ensure device_id is propagated
+            setTimeout(pending, 100);
+          }
         });
 
         player.addListener("not_ready", () => {
@@ -455,6 +493,42 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, [startSpotifyPositionPolling, stopSpotifyPositionPolling]);
 
+  // Keep initPlayerRef in sync so spotifyPlayTrack's 404 handler can call it
+  // without creating a circular dependency (spotifyPlayTrack has [] deps).
+  initPlayerRef.current = initPlayer;
+
+  // ── Tab visibility listener ─────────────────────────────────────────────
+  // When the tab returns to foreground after being in the background, the
+  // Spotify SDK's WebSocket connection is likely dead (browsers suspend
+  // background tab JS/timers). Proactively check the player's health and
+  // re-init if it's gone stale, so the user's next play click works without
+  // needing a manual second click.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      // If we think we're ready, verify the player is actually alive
+      if (spotifyReady && spotifyPlayerRef.current) {
+        spotifyPlayerRef.current.getCurrentState().catch(() => {
+          // getCurrentState() rejects when the underlying WebSocket is dead
+          console.log("[Muse Playback] player dead after background — re-initing");
+          setSpotifyReady(false);
+          spotifyDeviceIdRef.current = null;
+          try {
+            spotifyPlayerRef.current?.disconnect();
+          } catch {}
+          spotifyPlayerRef.current = null;
+          stopSpotifyPositionPolling();
+          initPlayer();
+        });
+      } else if (!spotifyPlayerRef.current) {
+        // Player doesn't exist — re-init
+        initPlayer();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [spotifyReady, initPlayer, stopSpotifyPositionPolling]);
+
   // Poll for session recovery — if the player isn't ready, re-check every 5s.
   useEffect(() => {
     if (spotifyReady) return;
@@ -492,7 +566,31 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (!spotifyReady || !spotifyPlayerRef.current) {
-        console.warn("[Muse Playback] player not ready — attempting re-init");
+        console.warn("[Muse Playback] player not ready — queuing play request + re-init");
+        // Queue this play request — it will execute when the new player's
+        // "ready" event fires (see the ready listener in initPlayer).
+        pendingPlayRef.current = () => {
+          // Re-check readiness inside the callback (player may have failed)
+          if (!spotifyDeviceIdRef.current) {
+            console.warn("[Muse Playback] pending play: device still not ready");
+            return;
+          }
+          // Single-track queue
+          const entry: QueueEntry = { id: trackId, title, spotifyUri };
+          queueRef.current = [entry];
+          queueIndexRef.current = 0;
+          setQueueLength(1);
+          setQueueIndex(0);
+          endedHandledRef.current = false;
+          if (currentTrackIdRef.current !== trackId) {
+            setCurrentTrackId(trackId);
+            setCurrentTrackTitle(title ?? null);
+          }
+          spotifyPlayTrack(spotifyUri).catch((err) => {
+            console.error("[Muse Playback] pending play error:", err);
+          });
+        };
+        // Try to re-init the player immediately
         fetch("/api/spotify/token")
           .then((r) => (r.ok ? r.json() : null))
           .then((data) => {
@@ -509,9 +607,12 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Single-track mode: clear album context so playback stops at track end.
-      albumTrackUrisRef.current = null;
-      albumTrackIndexRef.current = 0;
+      // Single-track mode: set queue to just this track.
+      const entry: QueueEntry = { id: trackId, title, spotifyUri };
+      queueRef.current = [entry];
+      queueIndexRef.current = 0;
+      setQueueLength(1);
+      setQueueIndex(0);
       endedHandledRef.current = false;
 
       if (currentTrackIdRef.current !== trackId) {
@@ -533,9 +634,16 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
         console.warn("[Muse Playback] playAlbum: no tracks with spotifyUri");
         return;
       }
-      // Set album context — auto-advance at track end.
-      albumTrackUrisRef.current = valid.map((t) => t.spotifyUri!);
-      albumTrackIndexRef.current = 0;
+      // Set queue to the album tracks — auto-advance at track end + next/previous.
+      const entries: QueueEntry[] = valid.map((t) => ({
+        id: t.id,
+        title: t.title,
+        spotifyUri: t.spotifyUri!,
+      }));
+      queueRef.current = entries;
+      queueIndexRef.current = 0;
+      setQueueLength(entries.length);
+      setQueueIndex(0);
       endedHandledRef.current = false;
 
       // Play the first track via the standard play() path.
@@ -545,7 +653,35 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (!spotifyReady || !spotifyPlayerRef.current) {
-        console.warn("[Muse Playback] player not ready for album");
+        console.warn("[Muse Playback] player not ready for album — queuing + re-init");
+        // Queue the album play — it will execute when the new player is ready.
+        pendingPlayRef.current = () => {
+          if (!spotifyDeviceIdRef.current) {
+            console.warn("[Muse Playback] pending album play: device still not ready");
+            return;
+          }
+          if (currentTrackIdRef.current !== first.id) {
+            setCurrentTrackId(first.id);
+            setCurrentTrackTitle(first.title ?? null);
+          }
+          spotifyPlayTrack(first.spotifyUri!).catch((err) => {
+            console.error("[Muse Playback] pending album play error:", err);
+          });
+        };
+        // Try to re-init the player immediately
+        fetch("/api/spotify/token")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (data?.access_token) {
+              spotifyTokenRef.current = data.access_token;
+              setSpotifyConnected(true);
+              setAuthError(false);
+              if (!spotifyPlayerRef.current) {
+                initPlayer();
+              }
+            }
+          })
+          .catch(() => {});
         return;
       }
       if (currentTrackIdRef.current !== first.id) {
@@ -556,7 +692,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
         console.error("[Muse Playback] playAlbum error:", err);
       });
     },
-    [isPremium, spotifyReady, spotifyPlayTrack]
+    [isPremium, spotifyReady, spotifyPlayTrack, initPlayer]
   );
 
   const pause = useCallback(() => {
@@ -580,8 +716,10 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     setIsPlaying(false);
     setCurrentTime(0);
     currentSpotifyUriRef.current = null;
-    albumTrackUrisRef.current = null;
-    albumTrackIndexRef.current = 0;
+    queueRef.current = [];
+    queueIndexRef.current = 0;
+    setQueueLength(0);
+    setQueueIndex(0);
   }, [stopSpotifyPositionPolling]);
 
   const seek = useCallback(
@@ -595,17 +733,37 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
 
   const next = useCallback(() => {
     if (!isPremium) return;
-    spotifyPlayerRef.current?.nextTrack().catch((err: unknown) => {
-      console.error("[Muse Playback] nextTrack error:", err);
+    const queue = queueRef.current;
+    const idx = queueIndexRef.current;
+    if (queue.length === 0 || idx >= queue.length - 1) return;
+    const nextIdx = idx + 1;
+    const entry = queue[nextIdx];
+    queueIndexRef.current = nextIdx;
+    setQueueIndex(nextIdx);
+    endedHandledRef.current = false;
+    setCurrentTrackId(entry.id);
+    setCurrentTrackTitle(entry.title ?? null);
+    spotifyPlayTrack(entry.spotifyUri).catch((err: unknown) => {
+      console.error("[Muse Playback] next track error:", err);
     });
-  }, [isPremium]);
+  }, [isPremium, spotifyPlayTrack]);
 
   const previous = useCallback(() => {
     if (!isPremium) return;
-    spotifyPlayerRef.current?.previousTrack().catch((err: unknown) => {
-      console.error("[Muse Playback] previousTrack error:", err);
+    const queue = queueRef.current;
+    const idx = queueIndexRef.current;
+    if (queue.length === 0 || idx <= 0) return;
+    const prevIdx = idx - 1;
+    const entry = queue[prevIdx];
+    queueIndexRef.current = prevIdx;
+    setQueueIndex(prevIdx);
+    endedHandledRef.current = false;
+    setCurrentTrackId(entry.id);
+    setCurrentTrackTitle(entry.title ?? null);
+    spotifyPlayTrack(entry.spotifyUri).catch((err: unknown) => {
+      console.error("[Muse Playback] previous track error:", err);
     });
-  }, [isPremium]);
+  }, [isPremium, spotifyPlayTrack]);
 
   const setVolume = useCallback((vol: number) => {
     spotifyPlayerRef.current?.setVolume(vol).catch((err: unknown) => {
@@ -621,6 +779,8 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     isPlaying,
     currentTime,
     duration,
+    queueLength,
+    queueIndex,
     spotifyReady,
     spotifyConnected,
     isPremium,

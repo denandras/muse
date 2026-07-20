@@ -34,12 +34,12 @@ export default function StarRating({
             }}
             className={`${
               readOnly ? "cursor-default" : "cursor-pointer"
-            } text-white/30 hover:text-yellow-400 transition-colors disabled:hover:text-white/30`}
+            } text-cream/30 hover:text-accent transition-colors disabled:hover:text-cream/30`}
             aria-label={`Rate ${n} star${n > 1 ? "s" : ""}`}
           >
             <Star
               size={size}
-              className={filled ? "fill-yellow-400 text-yellow-400" : ""}
+              className={filled ? "fill-accent text-accent" : ""}
               strokeWidth={1.5}
             />
           </motion.button>

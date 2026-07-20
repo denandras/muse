@@ -90,7 +90,7 @@ export default function FilterBar({
             const v = e.target.value;
             onChange({ stars: v === "" ? null : v === "unrated" ? "unrated" : Number(v) });
           }}
-          className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+          className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/80 focus:outline-none focus:border-cream/20 transition-colors cursor-pointer"
         >
           {STARS_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -98,7 +98,7 @@ export default function FilterBar({
             </option>
           ))}
         </select>
-        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-cream/30 pointer-events-none" />
       </div>
 
       {/* Favorites only — heart icon toggle */}
@@ -107,14 +107,14 @@ export default function FilterBar({
         onClick={() => onChange({ favoritesOnly: !filters.favoritesOnly })}
         className={`flex items-center justify-center h-9 w-9 rounded-xl border transition-colors ${
           filters.favoritesOnly
-            ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
-            : "bg-white/[0.04] border-white/[0.06] text-white/30 hover:text-white/60"
+            ? "bg-secondary/15 border-secondary/30 text-secondary"
+            : "bg-cream/[0.04] border-cream/[0.06] text-cream/30 hover:text-cream/60"
         }`}
         title={filters.favoritesOnly ? "Showing favorites only" : "Show favorites only"}
         aria-pressed={filters.favoritesOnly}
         aria-label="Toggle favorites only"
       >
-        <Heart size={15} className={filters.favoritesOnly ? "fill-rose-400" : ""} strokeWidth={1.5} />
+        <Heart size={15} className={filters.favoritesOnly ? "fill-secondary" : ""} strokeWidth={1.5} />
       </button>
 
       {/* Sort + direction toggle */}
@@ -123,7 +123,7 @@ export default function FilterBar({
           <select
             value={filters.sort}
             onChange={(e) => onChange({ sort: e.target.value as SortKey })}
-            className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/80 focus:outline-none focus:border-white/20 transition-colors cursor-pointer"
+            className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/80 focus:outline-none focus:border-cream/20 transition-colors cursor-pointer"
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -131,12 +131,12 @@ export default function FilterBar({
               </option>
             ))}
           </select>
-          <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+          <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-cream/30 pointer-events-none" />
         </div>
         <button
           type="button"
           onClick={() => onChange({ sortDirection: filters.sortDirection === "asc" ? "desc" : "asc" })}
-          className="h-9 w-9 flex items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-white/60 hover:text-white/90 hover:bg-white/[0.08] transition-colors"
+          className="h-9 w-9 flex items-center justify-center rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/60 hover:text-cream/90 hover:bg-cream/[0.08] transition-colors"
           title={filters.sortDirection === "asc" ? "Ascending" : "Descending"}
           aria-label={`Sort ${filters.sortDirection === "asc" ? "ascending" : "descending"}`}
         >

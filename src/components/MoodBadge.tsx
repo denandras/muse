@@ -9,7 +9,7 @@ export default function MoodBadge({
   onClick?: () => void;
   active?: boolean;
 }) {
-  const color = mood.color || "#888888";
+  const color = mood.color || "var(--mood-fallback)";
   return (
     <button
       type="button"
@@ -18,7 +18,7 @@ export default function MoodBadge({
         onClick?.();
       }}
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all ${
-        active ? "ring-1 ring-white/40" : ""
+        active ? "ring-1 ring-cream/40" : ""
       }`}
       style={{
         backgroundColor: `${color}22`,
