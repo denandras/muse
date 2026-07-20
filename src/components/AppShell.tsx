@@ -29,13 +29,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const isLanding = pathname === "/";
-  const { authError: sdkAuthError } = usePlayback();
+  const { authError: sdkAuthError, currentTrackTitle } = usePlayback();
 
   // Show reconnect banner if either the server says the session is dead
   // (401 from /api/user) or the Spotify SDK fired authentication_error.
   // Note: we do NOT auto-redirect to landing page. The reconnect banner
   // lets the user re-authenticate without losing their current page context.
   const showReconnect = sessionExpired || sdkAuthError;
+
+  // When a track is playing, the MiniPlayer (position: fixed, bottom-0 on
+  // desktop / bottom-16 on mobile) occupies ~80px of vertical space at the
+  // bottom of the viewport. Without extra bottom padding on <main>, the
+  // pagination controls (and any end-of-page content) are obscured by the
+  // play bar. Add padding only when the MiniPlayer is actually visible.
+  const hasMiniPlayer = currentTrackTitle !== null;
 
   useEffect(() => {
     if (isLanding) return;
@@ -118,7 +125,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* Main content with page transitions */}
-      <main className="flex-1 min-w-0 pb-16 md:pb-0">
+      <main className={`flex-1 min-w-0 pb-16 md:pb-0 ${hasMiniPlayer ? "pb-44 md:pb-24" : ""}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={pathname}
