@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ArrowUp, ArrowDown, Heart } from "lucide-react";
+import { ChevronDown, ArrowUp, ArrowDown, Heart, ListMusic } from "lucide-react";
 import type { Genre, Mood, SortKey, SortDirection } from "@/lib/types";
 import TriStateFilter, {
   type TriStateMap,
@@ -12,6 +12,8 @@ export interface FilterState {
   moodFilters: TriStateMap;
   stars: number | "unrated" | null;
   favoritesOnly: boolean;
+  /** When true, tracks with matching stars show even if their album doesn't match the star filter. Default: true. */
+  trackLevelStars: boolean;
   sort: SortKey;
   sortDirection: SortDirection;
 }
@@ -102,6 +104,30 @@ export default function FilterBar({
         </select>
         <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-cream/30 pointer-events-none" />
       </div>
+
+      {/* Track-level star filter toggle — when ON, tracks with matching
+          individual star ratings appear even if their album doesn't match
+          the star filter. When OFF, only album-level stars are used (in
+          album/both view, tracks inside albums use the album's rating). */}
+      {filters.stars !== null && filters.stars !== "unrated" && (
+        <button
+          type="button"
+          onClick={() => onChange({ trackLevelStars: !filters.trackLevelStars })}
+          className={`flex items-center justify-center h-9 px-2.5 rounded-xl border transition-colors ${
+            filters.trackLevelStars
+              ? "bg-violet-500/15 border-violet-400/30 text-violet-300"
+              : "bg-cream/[0.04] border-cream/[0.06] text-cream/30 hover:text-cream/60"
+          }`}
+          title={
+            filters.trackLevelStars
+              ? "Showing tracks with matching individual stars (even if album doesn't match)"
+              : "Only showing albums/tracks that match the star filter"
+          }
+          aria-pressed={filters.trackLevelStars}
+        >
+          <ListMusic size={15} />
+        </button>
+      )}
 
       {/* Favorites only — heart icon toggle */}
       <button

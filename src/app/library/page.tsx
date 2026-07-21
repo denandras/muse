@@ -164,6 +164,7 @@ export default function LibraryPage() {
     moodFilters: {},
     stars: null,
     favoritesOnly: false,
+    trackLevelStars: true,
     sort: "added_at",
     sortDirection: "desc",
   });
@@ -179,7 +180,7 @@ export default function LibraryPage() {
   // Album detail modal state
   const [editingAlbum, setEditingAlbum] = useState<Album | null>(null);
 
-  const { playAlbum: playAlbumContext } = usePlayback();
+  const { playAlbum: playAlbumContext, currentTrackId } = usePlayback();
 
   // Fetch all library data from the API and write to cache + state.
   const fetchLibrary = useCallback(async (): Promise<boolean> => {
@@ -373,11 +374,27 @@ export default function LibraryPage() {
   // Filter tracks.
   // When showing both albums and tracks, hide tracks that belong to a
   // displayed album — they're already visible inside the album row.
+  //
+  // Star filter behavior depends on the trackLevelStars toggle:
+  // - trackLevelStars=true (default): tracks are filtered by their own
+  //   star rating. A 4-star track inside a 3-star album shows up when
+  //   the filter is 4+ (the album is hidden, the track shows standalone).
+  // - trackLevelStars=false: tracks inherit their album's star rating
+  //   for filtering. A 4-star track inside a 3-star album is hidden when
+  //   the filter is 4+ (because the album doesn't match).
   const filteredTracks = useMemo(() => {
     const q = filters.search.trim().toLowerCase();
     const albumSpotifyIds = new Set(
       showAlbums ? filteredAlbums.map((a) => a.spotify_id).filter(Boolean) : []
     );
+    // When trackLevelStars is false, build a map of album spotify_id → album stars
+    // so we can check the album's star rating for tracks that don't have their own.
+    const albumStarsBySpotifyId = new Map<string, number | null>();
+    if (!filters.trackLevelStars) {
+      for (const a of albums) {
+        if (a.spotify_id) albumStarsBySpotifyId.set(a.spotify_id, a.stars);
+      }
+    }
     return tracks
       .filter((t) => {
         if (showAlbums && t.album_spotify_id && albumSpotifyIds.has(t.album_spotify_id)) {
@@ -405,14 +422,31 @@ export default function LibraryPage() {
           if (tMoodIds.some((id) => moodExcludeIds.has(id))) return false;
         }
         if (filters.stars === "unrated") {
-          if (t.stars !== null) return false;
+          // When trackLevelStars is false, "unrated" means the album is unrated
+          if (!filters.trackLevelStars && t.album_spotify_id) {
+            const albumStars = albumStarsBySpotifyId.get(t.album_spotify_id);
+            if (albumStars !== undefined && albumStars !== null) return false;
+          } else {
+            if (t.stars !== null) return false;
+          }
         } else if (typeof filters.stars === "number") {
-          if (t.stars === null || t.stars < filters.stars) return false;
+          if (!filters.trackLevelStars && t.album_spotify_id) {
+            // Use the album's star rating instead of the track's
+            const albumStars = albumStarsBySpotifyId.get(t.album_spotify_id);
+            if (albumStars === undefined) {
+              // Album not found — fall back to track's own stars
+              if (t.stars === null || t.stars < filters.stars) return false;
+            } else {
+              if (albumStars === null || albumStars < filters.stars) return false;
+            }
+          } else {
+            if (t.stars === null || t.stars < filters.stars) return false;
+          }
         }
         return true;
       })
       .sort((a, b) => sortTracks(a, b, filters.sort, filters.sortDirection));
-  }, [tracks, filters, genreIncludeIds, genreExcludeIds, moodIncludeIds, moodExcludeIds, showAlbums, filteredAlbums]);
+  }, [tracks, filters, genreIncludeIds, genreExcludeIds, moodIncludeIds, moodExcludeIds, showAlbums, filteredAlbums, albums]);
 
   // Merge filtered albums and tracks into a single sorted list.
   // Tracks belonging to a displayed album are already hidden by
@@ -453,12 +487,19 @@ export default function LibraryPage() {
       arr.push(t);
       map.set(t.album_spotify_id, arr);
     });
-    // Sort each album's tracks by disc_number, then track_number
+    // Sort each album's tracks by disc_number, then track_number.
+    // When track_number/disc_number are NULL (pre-backfill), fall back to
+    // title as a deterministic tiebreaker so the order is stable across
+    // page loads (PostgREST returns tracks with the same added_at in an
+    // undefined order, making the sort non-deterministic without a
+    // tiebreaker).
     map.forEach((arr) => {
       arr.sort((a, b) => {
-        const discDiff = (a.disc_number ?? 0) - (b.disc_number ?? 0);
+        const discDiff = (a.disc_number ?? 99) - (b.disc_number ?? 99);
         if (discDiff !== 0) return discDiff;
-        return (a.track_number ?? 0) - (b.track_number ?? 0);
+        const tnDiff = (a.track_number ?? 99) - (b.track_number ?? 99);
+        if (tnDiff !== 0) return tnDiff;
+        return a.title.localeCompare(b.title);
       });
     });
     return map;
@@ -849,6 +890,7 @@ export default function LibraryPage() {
                       setEditingTrack(t);
                     }}
                     onOpenAlbumDetail={() => setEditingAlbum(item.album)}
+                    currentTrackId={currentTrackId}
                   />
                 ) : (
                   <TrackRow

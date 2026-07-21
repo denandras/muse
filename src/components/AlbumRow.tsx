@@ -26,6 +26,8 @@ interface AlbumRowProps {
   onToggleTrackFavorite?: (trackId: string, value: boolean) => void;
   onOpenTrackDetail?: (trackId: string) => void;
   onOpenAlbumDetail?: () => void;
+  /** ID of the currently playing track, used to highlight the album containing it. */
+  currentTrackId?: string | null;
 }
 
 export default function AlbumRow({
@@ -37,6 +39,7 @@ export default function AlbumRow({
   onToggleTrackFavorite,
   onOpenTrackDetail,
   onOpenAlbumDetail,
+  currentTrackId,
 }: AlbumRowProps) {
   const [expanded, setExpanded] = useState(false);
   const { play, playAlbum: playAlbumContext } = usePlayback();
@@ -45,6 +48,11 @@ export default function AlbumRow({
   // Spotify labels the album (album_type "single" can still contain
   // multiple tracks — e.g. a 2-part single).
   const canExpand = tracks.length > 1;
+
+  // Check if any track in this album is currently playing.
+  const isCurrent = currentTrackId
+    ? tracks.some((t) => t.id === currentTrackId)
+    : false;
 
   const playAlbum = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -72,7 +80,11 @@ export default function AlbumRow({
   return (
     <motion.div
       layout
-      className="rounded-xl bg-cream/[0.02] hover:bg-cream/[0.04] border border-cream/[0.04] transition-colors"
+      className={`rounded-xl border transition-colors ${
+        isCurrent
+          ? "bg-success/[0.06] border-success/20 hover:bg-success/[0.08]"
+          : "bg-cream/[0.02] hover:bg-cream/[0.04] border-cream/[0.04]"
+      }`}
     >
       {/* Album header */}
       <div
@@ -94,14 +106,15 @@ export default function AlbumRow({
 
         {/* Cover */}
         <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
-          {album.cover_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={album.cover_url}
-              alt=""
-              className="w-full h-full object-cover"
-            />
-          ) : (
+        {album.cover_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={album.cover_url}
+            alt=""
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+        ) : (
             <div className="w-full h-full flex items-center justify-center">
               <Disc3 size={18} className="text-cream/20" />
             </div>
@@ -117,7 +130,9 @@ export default function AlbumRow({
                 e.stopPropagation();
                 onOpenAlbumDetail?.();
               }}
-              className="text-sm font-medium text-cream/90 truncate text-left hover:underline"
+              className={`text-sm font-medium truncate text-left hover:underline ${
+                isCurrent ? "text-success" : "text-cream/90"
+              }`}
             >
               {album.title}
             </button>

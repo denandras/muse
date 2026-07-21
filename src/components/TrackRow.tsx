@@ -131,6 +131,7 @@ export default function TrackRow({
               <img
                 src={track.album_cover_url}
                 alt=""
+                loading="lazy"
                 className="w-full h-full object-cover"
               />
             ) : (
