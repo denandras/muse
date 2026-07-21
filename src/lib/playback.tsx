@@ -520,13 +520,14 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
         });
 
         player.addListener("not_ready", () => {
-          console.warn("[Muse Playback] Device not ready — clearing player");
+          console.warn("[Muse Playback] Device not ready — attempting reconnect");
           spotifyDeviceIdRef.current = null;
           setSpotifyReady(false);
-          try {
-            spotifyPlayerRef.current?.disconnect();
-          } catch {}
-          spotifyPlayerRef.current = null;
+          // Don't disconnect the player — the SDK may recover on its own
+          // (e.g. during page navigation the WebSocket can briefly hiccup).
+          // Just stop the position poll; the 5s session poll will re-init
+          // if the player doesn't recover. This is critical for keeping
+          // music playing across page navigations.
           stopSpotifyPositionPolling();
         });
 
@@ -534,7 +535,11 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
           "player_state_changed",
           (state: SpotifyPlayerState | null) => {
             if (!state) {
-              console.log("[Muse Playback] state = null (device disconnected?)");
+              // null state can happen briefly during page navigation when
+              // the SDK's WebSocket hiccups. Don't stop polling — just log
+              // and let the next state change recover. The stall detection
+              // in the position poll handles prolonged null states.
+              console.log("[Muse Playback] state = null (transient — ignoring)");
               return;
             }
 

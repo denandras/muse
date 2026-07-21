@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+// Page transitions removed: AnimatePresence mode="wait" caused the old
+// page to fully unmount before the new one mounted, disrupting the Spotify
+// SDK's WebSocket/audio pipeline during the ~0.4s DOM manipulation gap.
+// Music must continue uninterrupted across navigations.
 import {
   Library,
   FolderTree,
@@ -124,20 +127,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      {/* Main content with page transitions */}
+      {/* Main content — no AnimatePresence page transitions.
+          Animated page transitions (AnimatePresence mode="wait") caused
+          the old page to fully unmount before the new one mounted, which
+          disrupted the Spotify SDK's WebSocket connection and stopped
+          audio during navigation. The key={pathname} motion.div forced a
+          ~0.4s gap where the DOM was being torn down and rebuilt — enough
+          for the SDK to lose its audio sink. Pages now swap instantly. */}
       <main className={`flex-1 min-w-0 pb-16 md:pb-0 ${hasMiniPlayer ? "pb-44 md:pb-24" : ""}`}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={pathname}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="min-h-full"
-          >
-            {children}
-          </motion.div>
-        </AnimatePresence>
+        <div key={pathname} className="muse-page-enter min-h-full">
+          {children}
+        </div>
       </main>
     </div>
   );

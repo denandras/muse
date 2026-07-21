@@ -123,3 +123,20 @@ textarea {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(245, 240, 232, 0.2);
 }
+
+/* Page enter animation — lightweight CSS-only fade (no React unmount).
+   Replaces the AnimatePresence mode="wait" transition that disrupted
+   the Spotify SDK's audio pipeline during page navigation. */
+@keyframes muse-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.muse-page-enter {
+  animation: muse-page-enter 0.2s ease-out;
+}
