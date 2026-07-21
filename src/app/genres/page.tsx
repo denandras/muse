@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Loader2,
   X,
+  GitMerge,
 } from "lucide-react";
 import type { Genre } from "@/lib/types";
 
@@ -22,6 +23,7 @@ export default function GenresPage() {
     | { kind: "create"; parentId?: string }
     | { kind: "rename"; genre: Genre }
     | { kind: "delete"; genre: Genre }
+    | { kind: "merge"; genre: Genre }
     | null
   >(null);
 
@@ -37,7 +39,7 @@ export default function GenresPage() {
   }, [load]);
 
   // Build tree from flat list.
-  const tree = buildTree(genres);
+  const tree = useMemo(() => buildTree(genres), [genres]);
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
@@ -71,6 +73,7 @@ export default function GenresPage() {
               onRename={(genre) => setModal({ kind: "rename", genre })}
               onDelete={(genre) => setModal({ kind: "delete", genre })}
               onCreateChild={(parentId) => setModal({ kind: "create", parentId })}
+              onMerge={(genre) => setModal({ kind: "merge", genre })}
             />
           ))}
         </div>
@@ -105,6 +108,19 @@ export default function GenresPage() {
           }
           load();
         }}
+        onMerge={async (sourceId, targetId) => {
+          const res = await fetch(`/api/genres/${sourceId}/merge`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ target_id: targetId }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            console.error("Failed to merge genre:", res.status, err);
+            alert(`Failed to merge genre: ${err.error ?? res.statusText}`);
+          }
+          load();
+        }}
       />
     </div>
   );
@@ -116,6 +132,7 @@ interface TreeItemProps {
   onRename: (g: Genre) => void;
   onDelete: (g: Genre) => void;
   onCreateChild: (parentId: string) => void;
+  onMerge: (g: Genre) => void;
 }
 
 function GenreTreeItem({
@@ -124,6 +141,7 @@ function GenreTreeItem({
   onRename,
   onDelete,
   onCreateChild,
+  onMerge,
 }: TreeItemProps) {
   const [open, setOpen] = useState(true);
   const hasChildren = (genre.children?.length ?? 0) > 0;
@@ -163,6 +181,13 @@ function GenreTreeItem({
             <Plus size={13} />
           </button>
           <button
+            onClick={() => onMerge(genre)}
+            className="w-7 h-7 rounded-md hover:bg-cream/10 text-cream/50 hover:text-cream/90 flex items-center justify-center transition-colors"
+            title="Merge into…"
+          >
+            <GitMerge size={13} />
+          </button>
+          <button
             onClick={() => onRename(genre)}
             className="w-7 h-7 rounded-md hover:bg-cream/10 text-cream/50 hover:text-cream/90 flex items-center justify-center transition-colors"
             title="Rename"
@@ -195,6 +220,7 @@ function GenreTreeItem({
                 onRename={onRename}
                 onDelete={onDelete}
                 onCreateChild={onCreateChild}
+                onMerge={onMerge}
               />
             ))}
           </motion.div>
@@ -211,31 +237,45 @@ function GenreModals({
   onCreate,
   onRename,
   onDelete,
+  onMerge,
 }: {
   modal:
     | { kind: "create"; parentId?: string }
     | { kind: "rename"; genre: Genre }
     | { kind: "delete"; genre: Genre }
+    | { kind: "merge"; genre: Genre }
     | null;
   onClose: () => void;
   genres: Genre[];
   onCreate: (name: string, parentId: string | null) => Promise<void>;
   onRename: (id: string, name: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onMerge: (sourceId: string, targetId: string) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState<string | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Compute the list of valid merge targets (exclude source + all descendants)
+  const mergeTargets = useMemo(() => {
+    if (modal?.kind !== "merge") return [];
+    const tree = buildTree(genres);
+    const excluded = collectDescendantIds(modal.genre.id, genres);
+    return flatten(tree).filter((g) => !excluded.has(g.id));
+  }, [modal, genres]);
 
   useEffect(() => {
     setName(modal?.kind === "rename" ? modal.genre.name : "");
     setParentId(modal?.kind === "create" ? (modal.parentId ?? null) : null);
+    setMergeTargetId(null);
   }, [modal]);
 
   if (!modal) return null;
 
   const submit = async () => {
-    if (modal.kind !== "delete" && !name.trim()) return;
+    if (modal.kind !== "delete" && modal.kind !== "merge" && !name.trim()) return;
+    if (modal.kind === "merge" && !mergeTargetId) return;
     setBusy(true);
     try {
       if (modal.kind === "create") {
@@ -244,6 +284,8 @@ function GenreModals({
         await onRename(modal.genre.id, name.trim());
       } else if (modal.kind === "delete") {
         await onDelete(modal.genre.id);
+      } else if (modal.kind === "merge") {
+        await onMerge(modal.genre.id, mergeTargetId!);
       }
       onClose();
     } finally {
@@ -273,6 +315,8 @@ function GenreModals({
                 ? "Create genre"
                 : modal.kind === "rename"
                 ? "Rename genre"
+                : modal.kind === "merge"
+                ? "Merge genre"
                 : "Delete genre"}
             </h3>
             <button onClick={onClose} className="text-cream/40 hover:text-cream/80">
@@ -285,6 +329,35 @@ function GenreModals({
               Delete <span className="text-cream/90">{modal.genre.name}</span>?
               Subgenres and associations are also removed. This cannot be undone.
             </p>
+          ) : modal.kind === "merge" ? (
+            <>
+              <p className="text-sm text-cream/60">
+                Merge <span className="text-cream/90">{modal.genre.name}</span> into
+                another genre. All tracks, albums, and subgenres assigned to{" "}
+                <span className="text-cream/90">{modal.genre.name}</span> will be
+                moved to the target. The source genre will be deleted.
+              </p>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs text-cream/50">Merge into</span>
+                <select
+                  value={mergeTargetId ?? ""}
+                  onChange={(e) => setMergeTargetId(e.target.value || null)}
+                  className="h-10 px-3 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/70"
+                >
+                  <option value="">Select target genre…</option>
+                  {mergeTargets.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {mergeTargets.length === 0 && (
+                <p className="text-xs text-cream/30">
+                  No valid targets. You need at least one other genre to merge into.
+                </p>
+              )}
+            </>
           ) : (
             <>
               <label className="flex flex-col gap-1.5">
@@ -327,10 +400,19 @@ function GenreModals({
             </button>
             <button
               onClick={submit}
-              disabled={busy || (modal.kind !== "delete" && !name.trim())}
+              disabled={
+                busy ||
+                (modal.kind === "delete"
+                  ? false
+                  : modal.kind === "merge"
+                  ? !mergeTargetId
+                  : !name.trim())
+              }
               className={`h-9 px-4 rounded-xl text-sm transition-colors disabled:opacity-50 ${
                 modal.kind === "delete"
                   ? "bg-secondary text-cream hover:bg-secondary-hover"
+                  : modal.kind === "merge"
+                  ? "bg-primary text-cream hover:bg-primary-hover"
                   : "bg-primary text-cream hover:bg-primary-hover"
               }`}
             >
@@ -340,6 +422,8 @@ function GenreModals({
                 ? "Create"
                 : modal.kind === "rename"
                 ? "Rename"
+                : modal.kind === "merge"
+                ? "Merge"
                 : "Delete"}
             </button>
           </div>
@@ -383,4 +467,23 @@ function flatten(tree: Genre[]): { id: string; label: string }[] {
   };
   walk(tree, "");
   return out;
+}
+
+/**
+ * Collect all descendant IDs (including the root itself) from a flat genre list.
+ * Used to exclude the source and its subtree from the merge target selector.
+ */
+function collectDescendantIds(rootId: string, flat: Genre[]): Set<string> {
+  const ids = new Set<string>([rootId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    flat.forEach((g) => {
+      if (g.parent_id && ids.has(g.parent_id) && !ids.has(g.id)) {
+        ids.add(g.id);
+        changed = true;
+      }
+    });
+  }
+  return ids;
 }

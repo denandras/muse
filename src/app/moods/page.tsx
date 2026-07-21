@@ -8,6 +8,7 @@ import {
   Trash2,
   Loader2,
   X,
+  GitMerge,
 } from "lucide-react";
 import type { Mood } from "@/lib/types";
 
@@ -30,6 +31,7 @@ export default function MoodsPage() {
     | { kind: "create" }
     | { kind: "rename"; mood: Mood }
     | { kind: "delete"; mood: Mood }
+    | { kind: "merge"; mood: Mood }
     | null
   >(null);
 
@@ -91,6 +93,13 @@ export default function MoodsPage() {
               )}
               <div className="flex items-center gap-1 opacity-60 sm:opacity-40 sm:hover:opacity-100 transition-opacity">
                 <button
+                  onClick={() => setModal({ kind: "merge", mood: m })}
+                  className="w-7 h-7 rounded-md hover:bg-cream/10 text-cream/50 hover:text-cream/90 flex items-center justify-center transition-colors"
+                  title="Merge into…"
+                >
+                  <GitMerge size={13} />
+                </button>
+                <button
                   onClick={() => setModal({ kind: "rename", mood: m })}
                   className="w-7 h-7 rounded-md hover:bg-cream/10 text-cream/50 hover:text-cream/90 flex items-center justify-center transition-colors"
                   title="Edit"
@@ -113,6 +122,7 @@ export default function MoodsPage() {
       <MoodModals
         modal={modal}
         onClose={() => setModal(null)}
+        moods={moods}
         onCreate={async (name, color) => {
           await fetch("/api/moods", {
             method: "POST",
@@ -130,7 +140,25 @@ export default function MoodsPage() {
           load();
         }}
         onDelete={async (id) => {
-          await fetch(`/api/moods/${id}`, { method: "DELETE" });
+          const res = await fetch(`/api/moods/${id}`, { method: "DELETE" });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            console.error("Failed to delete mood:", res.status, err);
+            alert(`Failed to delete mood: ${err.error ?? res.statusText}`);
+          }
+          load();
+        }}
+        onMerge={async (sourceId, targetId) => {
+          const res = await fetch(`/api/moods/${sourceId}/merge`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ target_id: targetId }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            console.error("Failed to merge mood:", res.status, err);
+            alert(`Failed to merge mood: ${err.error ?? res.statusText}`);
+          }
           load();
         }}
       />
@@ -141,33 +169,46 @@ export default function MoodsPage() {
 function MoodModals({
   modal,
   onClose,
+  moods,
   onCreate,
   onRename,
   onDelete,
+  onMerge,
 }: {
   modal:
     | { kind: "create" }
     | { kind: "rename"; mood: Mood }
     | { kind: "delete"; mood: Mood }
+    | { kind: "merge"; mood: Mood }
     | null;
   onClose: () => void;
+  moods: Mood[];
   onCreate: (name: string, color: string | null) => Promise<void>;
   onRename: (id: string, name: string, color: string | null) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onMerge: (sourceId: string, targetId: string) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState<string | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setName(modal?.kind === "rename" ? modal.mood.name : "");
     setColor(modal?.kind === "rename" ? modal.mood.color : null);
+    setMergeTargetId(null);
   }, [modal]);
 
   if (!modal) return null;
 
+  // For merge: list all moods except the source
+  const mergeTargets = modal?.kind === "merge"
+    ? moods.filter((m) => m.id !== modal.mood.id)
+    : [];
+
   const submit = async () => {
-    if (!name.trim()) return;
+    if (modal.kind !== "delete" && modal.kind !== "merge" && !name.trim()) return;
+    if (modal.kind === "merge" && !mergeTargetId) return;
     setBusy(true);
     try {
       if (modal.kind === "create") {
@@ -176,6 +217,8 @@ function MoodModals({
         await onRename(modal.mood.id, name.trim(), color);
       } else if (modal.kind === "delete") {
         await onDelete(modal.mood.id);
+      } else if (modal.kind === "merge") {
+        await onMerge(modal.mood.id, mergeTargetId!);
       }
       onClose();
     } finally {
@@ -205,6 +248,8 @@ function MoodModals({
                 ? "Create mood"
                 : modal.kind === "rename"
                 ? "Edit mood"
+                : modal.kind === "merge"
+                ? "Merge mood"
                 : "Delete mood"}
             </h3>
             <button onClick={onClose} className="text-cream/40 hover:text-cream/80">
@@ -217,6 +262,35 @@ function MoodModals({
               Delete <span className="text-cream/90">{modal.mood.name}</span>?
               Associations are removed. This cannot be undone.
             </p>
+          ) : modal.kind === "merge" ? (
+            <>
+              <p className="text-sm text-cream/60">
+                Merge <span className="text-cream/90">{modal.mood.name}</span> into
+                another mood. All tracks and albums assigned to{" "}
+                <span className="text-cream/90">{modal.mood.name}</span> will be
+                moved to the target. The source mood will be deleted.
+              </p>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs text-cream/50">Merge into</span>
+                <select
+                  value={mergeTargetId ?? ""}
+                  onChange={(e) => setMergeTargetId(e.target.value || null)}
+                  className="h-10 px-3 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/70"
+                >
+                  <option value="">Select target mood…</option>
+                  {mergeTargets.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {mergeTargets.length === 0 && (
+                <p className="text-xs text-cream/30">
+                  No other moods to merge into. Create at least one more mood first.
+                </p>
+              )}
+            </>
           ) : (
             <>
               <label className="flex flex-col gap-1.5">
@@ -280,10 +354,19 @@ function MoodModals({
             </button>
             <button
               onClick={submit}
-              disabled={busy || (modal.kind !== "delete" && !name.trim())}
+              disabled={
+                busy ||
+                (modal.kind === "delete"
+                  ? false
+                  : modal.kind === "merge"
+                  ? !mergeTargetId
+                  : !name.trim())
+              }
               className={`h-9 px-4 rounded-xl text-sm transition-colors disabled:opacity-50 ${
                 modal.kind === "delete"
                   ? "bg-secondary text-cream hover:bg-secondary-hover"
+                  : modal.kind === "merge"
+                  ? "bg-primary text-cream hover:bg-primary-hover"
                   : "bg-secondary text-cream hover:bg-secondary-hover"
               }`}
             >
@@ -293,6 +376,8 @@ function MoodModals({
                 ? "Create"
                 : modal.kind === "rename"
                 ? "Save"
+                : modal.kind === "merge"
+                ? "Merge"
                 : "Delete"}
             </button>
           </div>
