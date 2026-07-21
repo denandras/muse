@@ -15,6 +15,7 @@ import {
   Plus,
   Check,
   Trash2,
+  Share2,
 } from "lucide-react";
 import type { Track, Genre, Mood } from "@/lib/types";
 import StarRating from "./StarRating";
@@ -71,6 +72,7 @@ export default function TrackDetailModal({
   const [selectedMoodIds, setSelectedMoodIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const [showGenrePicker, setShowGenrePicker] = useState(false);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -232,6 +234,25 @@ export default function TrackDetailModal({
                 </h3>
                 <p className="text-xs text-cream/40 truncate">{track.artist}</p>
               </div>
+              <button
+                onClick={() => {
+                  if (!track.spotify_id) return;
+                  const url = `https://open.spotify.com/track/${track.spotify_id}`;
+                  navigator.clipboard?.writeText(url).then(() => {
+                    setShareCopied(true);
+                    setTimeout(() => setShareCopied(false), 2000);
+                  });
+                }}
+                disabled={!track.spotify_id}
+                className="text-cream/40 hover:text-cream/80 transition-colors flex-shrink-0 disabled:opacity-30"
+                title="Copy Spotify link"
+              >
+                {shareCopied ? (
+                  <Check size={16} className="text-success" />
+                ) : (
+                  <Share2 size={16} />
+                )}
+              </button>
               <button
                 onClick={() => !saving && onClose()}
                 className="text-cream/40 hover:text-cream/80 transition-colors flex-shrink-0"

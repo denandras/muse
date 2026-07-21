@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Loader2, ChevronLeft, ChevronRight, Search, X, Play } from "lucide-react";
 import type { Album, Genre, Mood, Track, ViewMode, SortKey, SortDirection } from "@/lib/types";
@@ -181,6 +182,24 @@ export default function LibraryPage() {
   const [editingAlbum, setEditingAlbum] = useState<Album | null>(null);
 
   const { playAlbum: playAlbumContext, currentTrackId } = usePlayback();
+
+  // Read ?track=ID query param to open detail modal from MiniPlayer navigation
+  const router = useRouter();
+
+  // When tracks are loaded and a ?track=ID param is present, open the
+  // detail modal for that track. Clears the param after opening so
+  // navigating back doesn't re-open it.
+  useEffect(() => {
+    if (tracks.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const trackId = params.get("track");
+    if (!trackId) return;
+    const track = tracks.find((t) => t.id === trackId);
+    if (track) {
+      setEditingTrack(track);
+      router.replace("/library", { scroll: false });
+    }
+  }, [tracks, router]);
 
   // Fetch all library data from the API and write to cache + state.
   const fetchLibrary = useCallback(async (): Promise<boolean> => {

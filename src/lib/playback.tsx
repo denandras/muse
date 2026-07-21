@@ -520,15 +520,15 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
         });
 
         player.addListener("not_ready", () => {
-          console.warn("[Muse Playback] Device not ready — attempting reconnect");
+          console.warn("[Muse Playback] Device not ready — clearing device ID");
           spotifyDeviceIdRef.current = null;
           setSpotifyReady(false);
-          // Don't disconnect the player — the SDK may recover on its own
-          // (e.g. during page navigation the WebSocket can briefly hiccup).
-          // Just stop the position poll; the 5s session poll will re-init
-          // if the player doesn't recover. This is critical for keeping
-          // music playing across page navigations.
-          stopSpotifyPositionPolling();
+          // Don't stop the position poll or disconnect the player.
+          // The SDK may briefly fire not_ready during transitions (e.g. when
+          // the WebSocket hiccups during page navigation or right after
+          // starting playback). Stopping the poll here would kill playback
+          // recovery — the stall detection in the poll handles prolonged
+          // not_ready states, and the 5s session poll re-inits if needed.
         });
 
         player.addListener(
@@ -585,9 +585,18 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
 
             if (!state.paused) {
               startSpotifyPositionPolling();
-            } else {
-              stopSpotifyPositionPolling();
             }
+            // Don't stop polling on state.paused === true.
+            // The Spotify SDK can briefly fire paused:true right after
+            // starting playback (a known quirk on some browsers), then
+            // immediately fire paused:false again. If we stop the poll on
+            // the first paused:true, playback appears to "start and stop
+            // right after start" — the poll dies, stall detection can't
+            // run, and the user has to click play again.
+            // Instead, let the poll keep running. It reads getCurrentState()
+            // directly each tick — if the track is genuinely paused, the
+            // position simply won't advance. The stall detection handles
+            // truly stalled playback after ~3s.
           }
         );
 

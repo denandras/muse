@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Play,
@@ -23,6 +24,7 @@ function formatTime(seconds: number): string {
 
 export default function MiniPlayer() {
   const {
+    currentTrackId,
     currentTrackTitle,
     currentTrackArtist,
     currentTrackAlbumArt,
@@ -41,11 +43,18 @@ export default function MiniPlayer() {
     setVolume,
   } = usePlayback();
 
+  const router = useRouter();
   const [volume, setVolumeState] = useState(0.5);
   const [muted, setMuted] = useState(false);
 
   const hasTrack = currentTrackTitle !== null;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Navigate to library with query param to open track detail modal
+  const openTrackDetail = () => {
+    if (!currentTrackId) return;
+    router.push(`/library?track=${encodeURIComponent(currentTrackId)}`);
+  };
 
   // Next/Prev are disabled when: not Premium, OR at queue boundary.
   // queueIndex is 0-based; queueLength is the total count.
@@ -94,15 +103,17 @@ export default function MiniPlayer() {
             <div className="rounded-2xl border border-cream/10 bg-cream/[0.05] backdrop-blur-xl px-3 py-2.5">
               {/* Controls row */}
               <div className="flex items-center gap-3">
-              {/* Album art */}
+              {/* Album art — click to open full-size in new tab */}
               <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
                 {currentTrackAlbumArt ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={currentTrackAlbumArt}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+                  <a href={currentTrackAlbumArt} target="_blank" rel="noopener noreferrer" title="Open cover image">
+                    <img
+                      src={currentTrackAlbumArt}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  </a>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <Music size={16} className="text-cream/30" />
@@ -110,15 +121,23 @@ export default function MiniPlayer() {
                 )}
               </div>
 
-              {/* Track info */}
+              {/* Track info — click to open track detail */}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-cream/90">
+                <button
+                  type="button"
+                  onClick={openTrackDetail}
+                  className="block w-full text-left truncate text-sm font-medium text-cream/90 hover:underline cursor-pointer"
+                >
                   {currentTrackTitle}
-                </p>
+                </button>
                 <div className="flex items-center gap-2">
-                  <p className="truncate text-xs text-cream/50">
+                  <button
+                    type="button"
+                    onClick={openTrackDetail}
+                    className="truncate text-xs text-cream/50 hover:underline cursor-pointer text-left"
+                  >
                     {currentTrackArtist ?? "—"}
-                  </p>
+                  </button>
                   {queueLength > 1 && (
                     <span className="text-[10px] tabular-nums text-cream/30 flex-shrink-0">
                       {queueIndex + 1}/{queueLength}
