@@ -43,10 +43,11 @@ export async function GET(request: NextRequest) {
   }
 
   interface TrackItem {
-    track: {
+    item: {
       id: string;
       uri: string;
       name: string;
+      type: string;
       duration_ms: number;
       artists: Array<{ name: string }>;
       album: { id: string; name: string; images: Array<{ url: string }> } | null;
@@ -72,13 +73,15 @@ export async function GET(request: NextRequest) {
       cover_url: string | null;
     }> = [];
     for (const item of items) {
-      if (!item.track) continue;
-      const t = item.track;
+      if (!item.item) continue;
+      const t = item.item;
+      // Skip episodes — only want tracks
+      if (t.type && t.type !== "track") continue;
       tracks.push({
         id: t.id,
         uri: t.uri,
         name: t.name,
-        artist: t.artists.map((a) => a.name).join(", "),
+        artist: t.artists?.map((a) => a.name).join(", ") ?? "",
         album: t.album?.name ?? "",
         duration_ms: t.duration_ms,
         cover_url: t.album?.images?.[0]?.url ?? null,
@@ -130,7 +133,6 @@ export async function GET(request: NextRequest) {
   }
 
   const firstData = (await res.json()) as ItemsPage;
-  console.log("[playlist-tracks] first page response:", JSON.stringify({ total: firstData.total, itemCount: (firstData.items ?? []).length, next: firstData.next, hasTrackField: !!(firstData.items?.[0]?.track), firstItemKeys: firstData.items?.[0] ? Object.keys(firstData.items[0]) : [] }));
   const tracks = extractTracks(firstData.items ?? []);
 
   // Follow next URLs for pagination

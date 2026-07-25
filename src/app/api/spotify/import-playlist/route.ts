@@ -56,10 +56,11 @@ export async function POST(request: NextRequest) {
   const moodIds = body.moodIds ?? [];
 
   interface PlaylistTrack {
-    track: {
+    item: {
       id: string;
       uri: string;
       name: string;
+      type: string;
       duration_ms: number;
       artists: Array<{ name: string }>;
       album: { id: string; name: string; images: Array<{ url: string }> } | null;
@@ -124,8 +125,9 @@ export async function POST(request: NextRequest) {
 
   const processItems = (items: PlaylistTrack[]) => {
     for (const item of items) {
-      if (!item.track) continue;
-      const t = item.track;
+      if (!item.item) continue;
+      const t = item.item;
+      if (t.type && t.type !== "track") continue;
       trackRows.push({
         user_id: user.id,
         spotify_id: t.id,
