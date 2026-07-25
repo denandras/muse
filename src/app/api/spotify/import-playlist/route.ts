@@ -62,60 +62,66 @@ export async function POST(request: NextRequest) {
       name: string;
       duration_ms: number;
       artists: Array<{ name: string }>;
-      album: { id: string; name: string; images: Array<{ url: string }> };
+      album: { id: string; name: string; images: Array<{ url: string }> } | null;
     } | null;
     added_at: string;
   }
 
-  interface PlaylistTracksPage {
+  interface TracksPage {
     items: PlaylistTrack[];
     total: number;
     next: string | null;
     offset: number;
   }
 
-  const fetchPage = async (token: string, offset: number) => {
-    const url = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&offset=${offset}&market=from_token`;
+  interface PlaylistResponse {
+    tracks: TracksPage;
+  }
+
+  // Use GET /playlists/{id} instead of /playlists/{id}/items or /tracks.
+  // The /items endpoint 403s on followed playlists (only works for owned/
+  // collaborative). The /tracks endpoint is deprecated and 403s for everyone.
+  // GET /playlists/{id} works for ANY playlist and returns tracks inline.
+  const fields = "tracks(total,limit,offset,next,items(track(id,uri,name,duration_ms,artists(name),album(id,name,images(url))),added_at))";
+  const firstUrl = `https://api.spotify.com/v1/playlists/${playlistId}?fields=${encodeURIComponent(fields)}`;
+
+  const fetchUrl = async (url: string, token: string) => {
     return fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
   };
 
-  // Fetch ALL pages of the playlist (100 per page).
-  // With maxDuration=300s this can handle playlists up to ~3000 tracks
-  // (30 API calls at ~1s each + Supabase upsert time).
   const trackRows: Array<Record<string, unknown>> = [];
   let total = 0;
-  let offset = 0;
-  let hasMore = true;
   let apiCalls = 0;
-  const MAX_API_CALLS = 40; // safety valve — 40 pages × 100 = 4000 tracks
+  const MAX_API_CALLS = 40; // safety valve
 
-  while (hasMore && apiCalls < MAX_API_CALLS) {
-    let res = await fetchPage(accessToken, offset);
+  // Fetch first page from GET /playlists/{id}
+  let res = await fetchUrl(firstUrl, accessToken);
 
-    // If 401, refresh and retry once
-    if (res.status === 401) {
-      const refreshed = await refreshOn401(request);
-      if (refreshed.token) {
-        accessToken = refreshed.token;
-        tokenRefreshResponse = refreshed.refreshedResponse;
-        res = await fetchPage(accessToken, offset);
-      }
+  if (res.status === 401) {
+    const refreshed = await refreshOn401(request);
+    if (refreshed.token) {
+      accessToken = refreshed.token;
+      tokenRefreshResponse = refreshed.refreshedResponse;
+      res = await fetchUrl(firstUrl, accessToken);
     }
+  }
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      return NextResponse.json(
-        { error: `Spotify API error ${res.status}`, detail: text.slice(0, 200) },
-        { status: res.status }
-      );
-    }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return NextResponse.json(
+      { error: `Spotify API error ${res.status}`, detail: text.slice(0, 200) },
+      { status: res.status }
+    );
+  }
 
-    const data = (await res.json()) as PlaylistTracksPage;
-    total = data.total;
-    for (const item of data.items ?? []) {
-      if (!item.track) continue; // null tracks (e.g. local files)
+  const firstData = (await res.json()) as PlaylistResponse;
+  total = firstData.tracks.total;
+
+  const processItems = (items: PlaylistTrack[]) => {
+    for (const item of items) {
+      if (!item.track) continue;
       const t = item.track;
       trackRows.push({
         user_id: user.id,
@@ -131,13 +137,36 @@ export async function POST(request: NextRequest) {
         added_at: item.added_at,
       });
     }
+  };
 
-    apiCalls++;
-    if (data.next && data.items && data.items.length > 0) {
-      offset += 100;
-    } else {
-      hasMore = false;
+  processItems(firstData.tracks.items ?? []);
+  apiCalls++;
+
+  // Follow tracks.next for additional pages
+  let nextUrl: string | null = firstData.tracks.next;
+
+  while (nextUrl && apiCalls < MAX_API_CALLS) {
+    let pageRes = await fetchUrl(nextUrl, accessToken);
+
+    if (pageRes.status === 401) {
+      const refreshed = await refreshOn401(request);
+      if (refreshed.token) {
+        accessToken = refreshed.token;
+        tokenRefreshResponse = refreshed.refreshedResponse;
+        pageRes = await fetchUrl(nextUrl, accessToken);
+      }
     }
+
+    if (!pageRes.ok) {
+      const text = await pageRes.text().catch(() => "");
+      console.error("[import-playlist] pagination error:", pageRes.status, text.slice(0, 200));
+      break;
+    }
+
+    const pageData = (await pageRes.json()) as TracksPage;
+    processItems(pageData.items ?? []);
+    apiCalls++;
+    nextUrl = pageData.next;
   }
 
   if (trackRows.length === 0) {
