@@ -319,7 +319,9 @@ export default function SyncButton({
     );
   }
 
-  // panel variant — larger, for a settings/dashboard card
+  // panel variant — larger, for a settings/dashboard card.
+  // All progress and result messages are shown inline (not fixed overlays)
+  // so they don't collide with the sync state grid below.
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
@@ -344,11 +346,66 @@ export default function SyncButton({
           </button>
         )}
       </div>
+      {/* Inline progress label + counter */}
       {running && progressLabel && (
-        <div className="text-sm text-cream/60">{progressLabel}</div>
+        <div className="flex items-center gap-2 text-sm text-cream/60">
+          <RefreshCw size={12} className="animate-spin flex-shrink-0" />
+          <span className="truncate">{progressLabel}</span>
+          {progress && progress.total > 0 && (
+            <span className="text-xs tabular-nums text-accent-light font-medium flex-shrink-0">
+              {progress.processed.toLocaleString()}/{progress.total.toLocaleString()}
+            </span>
+          )}
+        </div>
       )}
-      <SyncProgressBar progress={progress} onCancel={cancel} />
-      <SyncToast result={result} error={error} onDismiss={dismissResult} />
+      {/* Inline result message */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            className="flex items-start gap-2 rounded-xl bg-secondary/10 border border-secondary/30 px-3 py-2.5 text-sm text-secondary-light"
+          >
+            <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+            <span className="flex-1 min-w-0">{error}</span>
+            <button onClick={dismissResult} className="flex-shrink-0 text-cream/40 hover:text-cream/80 mt-0.5">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {result && !error && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            className="flex items-center gap-2 rounded-xl bg-success/10 border border-success/20 px-3 py-2.5 text-sm text-cream/90"
+          >
+            <CheckCircle2 size={14} className="text-success flex-shrink-0" />
+            <span>
+              {(() => {
+                const newTracks = result.likedTracksImported + result.albumTracksImported;
+                const note =
+                  (result.likedIncrementalStop || result.albumsIncrementalStop)
+                    ? " · incremental (stopped early)"
+                    : "";
+                return newTracks === 0 && result.albumsImported === 0
+                  ? "Already up to date"
+                  : `Imported ${newTracks} new track${newTracks === 1 ? "" : "s"}${
+                      result.albumsImported > 0
+                        ? `, ${result.albumsImported} album${result.albumsImported === 1 ? "" : "s"}`
+                        : ""
+                    }${note}`;
+              })()}
+            </span>
+            <button onClick={dismissResult} className="ml-auto text-cream/40 hover:text-cream/80">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
