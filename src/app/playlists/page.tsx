@@ -15,9 +15,13 @@ import {
   Palette,
   Play,
   Pause,
+  Minus,
 } from "lucide-react";
 import type { Genre, Mood } from "@/lib/types";
 import { usePlayback } from "@/lib/playback";
+import { useAuth } from "@/lib/useAuth";
+
+type OwnershipFilter = "mine" | "collaborative" | "all";
 
 interface SpotifyPlaylist {
   id: string;
@@ -27,6 +31,7 @@ interface SpotifyPlaylist {
   owner: { id: string; display_name: string | null } | null;
   tracks: { total: number } | null;
   public: boolean;
+  collaborative: boolean;
   description: string | null;
 }
 
@@ -60,6 +65,12 @@ export default function PlaylistsPage() {
 
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
+
+  // 3-state ownership filter: "mine" → "collaborative" → "all" → "mine" …
+  const [ownershipFilter, setOwnershipFilter] =
+    useState<OwnershipFilter>("mine");
+
+  const { user } = useAuth();
 
   const { playFromList, isPlaying, currentTrackId } = usePlayback();
 
@@ -188,11 +199,126 @@ export default function PlaylistsPage() {
     [selectedGenres, selectedMoods]
   );
 
-  const toggleGenre = (id: string) => {
-    setSelectedGenres((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
+  const genreTree = useMemo(() => buildGenreTree(genres), [genres]);
+
+  // Build a map from genre id → set of all descendant ids (not including self).
+  // Follows the same pattern as src/app/library/page.tsx.
+  const genreDescendantIds = useMemo(() => {
+    const descMap = new Map<string, Set<string>>();
+    const collect = (genre: Genre): Set<string> => {
+      const set = new Set<string>();
+      if (genre.children?.length) {
+        for (const child of genre.children) {
+          set.add(child.id);
+          for (const d of collect(child)) set.add(d);
+        }
+      }
+      descMap.set(genre.id, set);
+      return set;
+    };
+    genreTree.forEach(collect);
+    return descMap;
+  }, [genreTree]);
+
+  // Helper: collect descendant ids for a genre from the flat list.
+  // Used by GenreCheckItem to determine parent/child selection state.
+  const collectDescendantIds = useCallback(
+    (id: string): string[] => {
+      const set = genreDescendantIds.get(id);
+      return set ? Array.from(set) : [];
+    },
+    [genreDescendantIds]
+  );
+
+  // Toggle a genre with hierarchy awareness:
+  // - Clicking a parent toggles itself + all descendants together.
+  // - Clicking a child under a selected parent: if the parent is selected,
+  //   clicking a child to "enable" is a no-op (already implicitly included);
+  //   clicking a child to "disable" removes only that child (parent stays, but
+  //   becomes indeterminate). To keep the data model simple, when the parent
+  //   is selected and a child is toggled off, we expand the parent into its
+  //   individual children minus the clicked child (remove parent id, add all
+  //   children except the clicked one).
+  const toggleGenre = useCallback(
+    (id: string) => {
+      setSelectedGenres((prev) => {
+        const selected = new Set(prev);
+        const descendants = genreDescendantIds.get(id);
+        const childIds = descendants ? Array.from(descendants) : [];
+
+        // Is this genre currently "effectively selected"?
+        // A genre is effectively selected if its own id is in the set OR any
+        // of its ancestors is in the set (implicit inheritance).
+        const isAncestorSelected = (gid: string): boolean => {
+          let current: Genre | undefined = genres.find((g) => g.id === gid);
+          while (current) {
+            const pid = current.parent_id;
+            if (!pid) break;
+            if (selected.has(pid)) return true;
+            current = genres.find((g) => g.id === pid);
+          }
+          return false;
+        };
+
+        const isSelfSelected = selected.has(id);
+        const isImplicitlySelected =
+          !isSelfSelected && isAncestorSelected(id);
+
+        if (isSelfSelected) {
+          // Uncheck self + all descendants
+          selected.delete(id);
+          for (const d of childIds) selected.delete(d);
+        } else if (isImplicitlySelected) {
+          // Parent is selected. Clicking this child to "enable" is a no-op
+          // (it's already implicitly included). Clicking to "disable" is not
+          // possible here because the child isn't in the set — so this is a
+          // no-op. But we also need to handle the case where the user wants
+          // to exclude a child: that happens by clicking the child when it's
+          // already implicitly selected. Since the child id is NOT in the set,
+          // we treat this click as "I want to exclude this child".
+          // To exclude a child under a selected parent, we expand the parent:
+          // remove the nearest selected ancestor, add all its descendants
+          // except this child.
+          const nearestSelectedAncestor = (() => {
+            let current: Genre | undefined = genres.find((g) => g.id === id);
+            while (current) {
+              const pid = current.parent_id;
+              if (!pid) break;
+              if (selected.has(pid)) {
+                return genres.find((g) => g.id === pid);
+              }
+              current = genres.find((g) => g.id === pid);
+            }
+            return undefined;
+          })();
+
+          if (nearestSelectedAncestor) {
+            const ancestorDescendants = genreDescendantIds.get(
+              nearestSelectedAncestor.id
+            );
+            if (ancestorDescendants) {
+              // Remove the ancestor (it becomes indeterminate)
+              selected.delete(nearestSelectedAncestor.id);
+              // Add all descendant ids except the clicked child
+              for (const d of ancestorDescendants) {
+                if (d !== id) selected.add(d);
+              }
+            }
+          } else {
+            // No selected ancestor but somehow implicitly selected — fallback
+            selected.add(id);
+          }
+        } else {
+          // Not selected at all — check self + all descendants
+          selected.add(id);
+          for (const d of childIds) selected.add(d);
+        }
+
+        return Array.from(selected);
+      });
+    },
+    [genreDescendantIds, genres]
+  );
 
   const toggleMood = (id: string) => {
     setSelectedMoods((prev) =>
@@ -267,7 +393,47 @@ export default function PlaylistsPage() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  const genreTree = useMemo(() => buildGenreTree(genres), [genres]);
+  // Determine whether there are any collaborative playlists — if not, the
+  // "collaborative" state is disabled/skipped.
+  const hasCollaborative = useMemo(
+    () => playlists.some((pl) => pl.collaborative),
+    [playlists]
+  );
+
+  // Filtered playlists based on the ownership toggle.
+  const filteredPlaylists = useMemo(() => {
+    if (ownershipFilter === "all") return playlists;
+    if (ownershipFilter === "collaborative") {
+      return playlists.filter((pl) => pl.collaborative);
+    }
+    // "mine" — playlists where the current user is the owner and it's not
+    // collaborative (collaborative ones the user "owns" still show under
+    // Collaborative, not Mine, to avoid overlap).
+    const mySpotifyId = user?.spotify_id ?? null;
+    return playlists.filter((pl) => {
+      if (pl.collaborative) return false;
+      if (mySpotifyId && pl.owner?.id) return pl.owner.id === mySpotifyId;
+      // If we don't have the user's spotify id, fall back to "not collaborative
+      // and has an owner" — best-effort.
+      return !!pl.owner;
+    });
+  }, [playlists, ownershipFilter, user]);
+
+  // Cycle the ownership filter: mine → collaborative → all → mine …
+  // If there are no collaborative playlists, skip "collaborative".
+  const cycleOwnershipFilter = useCallback(() => {
+    setOwnershipFilter((prev) => {
+      if (prev === "mine") return hasCollaborative ? "collaborative" : "all";
+      if (prev === "collaborative") return "all";
+      return "mine";
+    });
+  }, [hasCollaborative]);
+
+  const ownershipLabel = useMemo(() => {
+    if (ownershipFilter === "mine") return "Mine";
+    if (ownershipFilter === "collaborative") return "Collaborative";
+    return "All";
+  }, [ownershipFilter]);
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
@@ -306,7 +472,29 @@ export default function PlaylistsPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {playlists.map((pl) => {
+          {/* Ownership filter toggle — cycles Mine → Collaborative → All */}
+          <div className="flex items-center justify-between gap-2 pb-1">
+            <button
+              onClick={cycleOwnershipFilter}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-cream/[0.04] border border-cream/[0.06] text-xs text-cream/70 hover:bg-cream/[0.08] hover:text-cream/90 transition-colors"
+              title="Cycle playlist ownership filter"
+            >
+              <span className="text-cream/40">Show:</span>
+              <span className="font-medium">{ownershipLabel}</span>
+              <ChevronRight size={12} className="text-cream/30" />
+            </button>
+            <span className="text-xs text-cream/30 tabular-nums">
+              {filteredPlaylists.length} playlist
+              {filteredPlaylists.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          {filteredPlaylists.length === 0 ? (
+            <div className="text-center py-12 text-sm text-cream/30 rounded-xl bg-cream/[0.02] border border-cream/[0.04]">
+              No {ownershipLabel.toLowerCase()} playlists to show.
+            </div>
+          ) : (
+            filteredPlaylists.map((pl) => {
             const isImported = importedIds.has(pl.id);
             const menuOpen = importMenuId === pl.id;
             const isImporting = importing === pl.id;
@@ -593,6 +781,7 @@ export default function PlaylistsPage() {
                                   depth={0}
                                   selectedIds={new Set(selectedGenres)}
                                   onToggle={toggleGenre}
+                                  collectDescendantIds={collectDescendantIds}
                                 />
                               ))}
                             </div>
@@ -675,11 +864,9 @@ export default function PlaylistsPage() {
                 </AnimatePresence>
               </div>
             );
-          })}
+          }))}
         </div>
       )}
-
-      {/* Toast */}
       <AnimatePresence>
         {toast && (
           <motion.div
@@ -702,15 +889,31 @@ function GenreCheckItem({
   depth,
   selectedIds,
   onToggle,
+  collectDescendantIds,
 }: {
   genre: Genre;
   depth: number;
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
+  collectDescendantIds: (id: string) => string[];
 }) {
   const [open, setOpen] = useState(depth < 1);
   const hasChildren = (genre.children?.length ?? 0) > 0;
   const selected = selectedIds.has(genre.id);
+
+  // Indeterminate: parent is not directly selected, but some (not all)
+  // descendants are in the set. This happens when the user expanded a
+  // parent into individual children by deselecting one child.
+  const childIds = hasChildren ? collectDescendantIds(genre.id) : [];
+  const selectedChildren = childIds.filter((id) => selectedIds.has(id));
+  const indeterminate =
+    !selected && hasChildren && selectedChildren.length > 0 && selectedChildren.length < childIds.length;
+  const allChildrenSelected =
+    !selected && hasChildren && selectedChildren.length === childIds.length && childIds.length > 0;
+
+  // If all children are selected but parent isn't, show as indeterminate too
+  // (clicking it would select the parent and collapse the children back)
+  const showIndeterminate = indeterminate || allChildrenSelected;
 
   return (
     <div>
@@ -730,13 +933,25 @@ function GenreCheckItem({
         </button>
         <div
           className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-colors ${
-            selected ? "bg-primary border-primary-hover" : "border-cream/20"
+            selected || allChildrenSelected
+              ? "bg-primary border-primary-hover"
+              : showIndeterminate
+              ? "bg-primary/40 border-primary/60"
+              : "border-cream/20"
           }`}
         >
-          {selected && <Check size={10} className="text-cream" />}
+          {selected || allChildrenSelected ? (
+            <Check size={10} className="text-cream" />
+          ) : showIndeterminate ? (
+            <Minus size={10} className="text-cream/80" />
+          ) : null}
         </div>
         <span
-          className={`text-sm ${selected ? "text-primary-light" : "text-cream/70"}`}
+          className={`text-sm ${
+            selected || allChildrenSelected || showIndeterminate
+              ? "text-primary-light"
+              : "text-cream/70"
+          }`}
         >
           {genre.name}
         </span>
@@ -750,6 +965,7 @@ function GenreCheckItem({
               depth={depth + 1}
               selectedIds={selectedIds}
               onToggle={onToggle}
+              collectDescendantIds={collectDescendantIds}
             />
           ))}
         </div>
