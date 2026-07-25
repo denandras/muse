@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
   }
 
   const fetchPage = async (token: string, offset: number) => {
-    const url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=${offset}`;
+    const url = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&offset=${offset}`;
     return fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
