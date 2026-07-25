@@ -200,14 +200,14 @@ export default function TrackRow({
           </span>
         )}
 
-        {/* Stars */}
-        <StarRating value={track.stars} onChange={readOnly ? undefined : onRate} readOnly={readOnly} />
-
-        {/* Favorite */}
+        {/* Favorite (left of stars) */}
         <FavoriteToggle
           isFavorite={track.is_favorite}
           onChange={readOnly ? undefined : onToggleFavorite}
         />
+
+        {/* Stars */}
+        <StarRating value={track.stars} onChange={readOnly ? undefined : onRate} readOnly={readOnly} />
 
         {/* Play button (right side) */}
         <button

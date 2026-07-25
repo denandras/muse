@@ -167,6 +167,12 @@ export default function AlbumRow({
           ))}
         </div>
 
+        <FavoriteToggle
+          isFavorite={album.is_favorite}
+          onChange={onToggleFavorite}
+        />
+        <StarRating value={album.stars} onChange={onRate} />
+
         {/* Play album */}
         <button
           type="button"
@@ -176,12 +182,6 @@ export default function AlbumRow({
         >
           <Play size={14} className="text-cream/70 ml-0.5" />
         </button>
-
-        <FavoriteToggle
-          isFavorite={album.is_favorite}
-          onChange={onToggleFavorite}
-        />
-        <StarRating value={album.stars} onChange={onRate} />
       </div>
 
       <AnimatePresence initial={false}>
