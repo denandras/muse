@@ -130,6 +130,7 @@ export async function GET(request: NextRequest) {
   }
 
   const firstData = (await res.json()) as ItemsPage;
+  console.log("[playlist-tracks] first page response:", JSON.stringify({ total: firstData.total, itemCount: (firstData.items ?? []).length, next: firstData.next, hasTrackField: !!(firstData.items?.[0]?.track), firstItemKeys: firstData.items?.[0] ? Object.keys(firstData.items[0]) : [] }));
   const tracks = extractTracks(firstData.items ?? []);
 
   // Follow next URLs for pagination
