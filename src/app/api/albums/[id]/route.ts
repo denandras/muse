@@ -144,7 +144,8 @@ export async function DELETE(
 
   let tokenRefresh = null as NextResponse | null
 
-  // If the album is saved in Spotify, remove it there first.
+  // If the album is saved in Spotify, try to remove it there first.
+  // Best-effort: if the Spotify API fails (non-401), we still delete from DB.
   if (album?.spotify_id) {
     const { token: accessToken, refreshedResponse: tr1 } =
       await getValidAccessToken(request)
@@ -175,13 +176,10 @@ export async function DELETE(
       }
 
       if (!res.ok) {
-        const text = await res.text()
-        const response = NextResponse.json(
-          { error: `Spotify delete error: ${res.status}`, detail: text },
-          { status: 502 }
+        // Log but don't block — still delete from DB
+        console.warn(
+          `[albums DELETE] Spotify removal failed (${res.status}), proceeding with DB deletion`
         )
-        mergeRefreshedCookies(response, tokenRefresh)
-        return response
       }
     }
   }

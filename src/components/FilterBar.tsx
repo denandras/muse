@@ -1,10 +1,36 @@
 "use client";
 
-import { ChevronDown, ArrowUp, ArrowDown, Heart, ListMusic } from "lucide-react";
+import { useMemo } from "react";
+import { ArrowUp, ArrowDown, Heart, ListMusic } from "lucide-react";
 import type { Genre, Mood, SortKey, SortDirection } from "@/lib/types";
 import TriStateFilter, {
   type TriStateMap,
 } from "./TriStateFilter";
+import CustomDropdown from "./CustomDropdown";
+
+// Build a tree from the flat genre list returned by the API.
+// The API returns { genres: [...] } where each genre has a parent_id
+// but no children array. The TriStateFilter needs depth/hierarchy info.
+function buildGenreTree(flat: Genre[]): Genre[] {
+  const map = new Map<string, Genre>();
+  flat.forEach((g) => map.set(g.id, { ...g, children: [] }));
+  const roots: Genre[] = [];
+  map.forEach((g) => {
+    if (g.parent_id && map.has(g.parent_id)) {
+      map.get(g.parent_id)!.children!.push(g);
+    } else {
+      roots.push(g);
+    }
+  });
+  const sortRec = (list: Genre[]) => {
+    list.sort(
+      (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)
+    );
+    list.forEach((g) => g.children && sortRec(g.children));
+  };
+  sortRec(roots);
+  return roots;
+}
 
 export interface FilterState {
   search: string;
@@ -52,6 +78,11 @@ export default function FilterBar({
   genres,
   moods,
 }: FilterBarProps) {
+  // Build a tree from the flat genre list (the API returns flat rows,
+  // not nested). Without this, every genre has children=undefined and
+  // they all render at depth 0 — flat instead of hierarchical.
+  const genreTree = useMemo(() => buildGenreTree(genres), [genres]);
+
   // Flatten genre tree for dropdown display with hierarchy info.
   // Items are in DFS order so the TriStateFilter can show/hide subtrees
   // when a parent is collapsed.
@@ -63,7 +94,7 @@ export default function FilterBar({
       if (hasChildren) walk(g.children!, depth + 1, g.id);
     });
   };
-  walk(genres, 0, null);
+  walk(genreTree, 0, null);
 
   // Flatten moods (no hierarchy).
   const flatMoods = moods.map((m) => ({ id: m.id, label: m.name, depth: 0, parentId: null, hasChildren: false }));
@@ -87,23 +118,14 @@ export default function FilterBar({
       />
 
       {/* Stars */}
-      <div className="relative">
-        <select
-          value={filters.stars ?? ""}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange({ stars: v === "" ? null : v === "unrated" ? "unrated" : Number(v) });
-          }}
-          className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/80 focus:outline-none focus:border-cream/20 transition-colors cursor-pointer"
-        >
-          {STARS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-cream/30 pointer-events-none" />
-      </div>
+      <CustomDropdown
+        value={filters.stars === null ? "" : filters.stars === "unrated" ? "unrated" : String(filters.stars)}
+        options={STARS_OPTIONS}
+        onChange={(v) => {
+          onChange({ stars: v === "" ? null : v === "unrated" ? "unrated" : Number(v) });
+        }}
+        className="w-auto"
+      />
 
       {/* Track-level star filter toggle — when ON, tracks with matching
           individual star ratings appear even if their album doesn't match
@@ -147,20 +169,12 @@ export default function FilterBar({
 
       {/* Sort + direction toggle */}
       <div className="flex items-center gap-1 sm:ml-auto">
-        <div className="relative">
-          <select
-            value={filters.sort}
-            onChange={(e) => onChange({ sort: e.target.value as SortKey })}
-            className="appearance-none h-9 pl-3 pr-8 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/80 focus:outline-none focus:border-cream/20 transition-colors cursor-pointer"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-cream/30 pointer-events-none" />
-        </div>
+        <CustomDropdown
+          value={filters.sort}
+          options={SORT_OPTIONS}
+          onChange={(v) => onChange({ sort: v as SortKey })}
+          className="w-auto"
+        />
         <button
           type="button"
           onClick={() => onChange({ sortDirection: filters.sortDirection === "asc" ? "desc" : "asc" })}

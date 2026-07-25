@@ -6,12 +6,19 @@ import { supabaseServer } from "@/lib/supabase-server";
  * POST /api/spotify/import-playlist
  * Body: { playlist_id: string, genreIds?: string[], moodIds?: string[] }
  *
- * Fetches tracks from the given Spotify playlist and upserts them
- * into the tracks table (is_liked=false). Optionally assigns the given
- * genre/mood IDs to every imported track.
+ * Fetches ALL tracks from the given Spotify playlist (paginating 100/page)
+ * and upserts them into the tracks table (is_liked=false). Optionally
+ * assigns the given genre/mood IDs to every imported track.
+ *
+ * Re-importing (user pushes import twice, or updates an imported playlist
+ * because they saved new tracks since last import) is idempotent: the
+ * (user_id, spotify_id) unique constraint collapses duplicates, and genre/
+ * mood tags are upserted with ignoreDuplicates so existing tags stay.
  *
  * Returns: { imported: number, total: number, skipped: number }
  */
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   const auth = await getCurrentUser(request);
   if (!auth) {
@@ -67,8 +74,6 @@ export async function POST(request: NextRequest) {
     offset: number;
   }
 
-  // Fetch tracks from the playlist (100 per page, first page only
-  // to stay within Vercel's 10s Hobby timeout)
   const fetchPage = async (token: string, offset: number) => {
     const url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=${offset}&additional_types=track`;
     return fetch(url, {
@@ -76,47 +81,63 @@ export async function POST(request: NextRequest) {
     });
   };
 
+  // Fetch ALL pages of the playlist (100 per page).
+  // With maxDuration=300s this can handle playlists up to ~3000 tracks
+  // (30 API calls at ~1s each + Supabase upsert time).
   const trackRows: Array<Record<string, unknown>> = [];
   let total = 0;
+  let offset = 0;
+  let hasMore = true;
+  let apiCalls = 0;
+  const MAX_API_CALLS = 40; // safety valve — 40 pages × 100 = 4000 tracks
 
-  let res = await fetchPage(accessToken, 0);
+  while (hasMore && apiCalls < MAX_API_CALLS) {
+    let res = await fetchPage(accessToken, offset);
 
-  // If 401, refresh and retry once
-  if (res.status === 401) {
-    const refreshed = await refreshOn401(request);
-    if (refreshed.token) {
-      accessToken = refreshed.token;
-      tokenRefreshResponse = refreshed.refreshedResponse;
-      res = await fetchPage(accessToken, 0);
+    // If 401, refresh and retry once
+    if (res.status === 401) {
+      const refreshed = await refreshOn401(request);
+      if (refreshed.token) {
+        accessToken = refreshed.token;
+        tokenRefreshResponse = refreshed.refreshedResponse;
+        res = await fetchPage(accessToken, offset);
+      }
     }
-  }
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    return NextResponse.json(
-      { error: `Spotify API error ${res.status}`, detail: text.slice(0, 200) },
-      { status: res.status }
-    );
-  }
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return NextResponse.json(
+        { error: `Spotify API error ${res.status}`, detail: text.slice(0, 200) },
+        { status: res.status }
+      );
+    }
 
-  const data = (await res.json()) as PlaylistTracksPage;
-  total = data.total;
-  for (const item of data.items ?? []) {
-    if (!item.track) continue; // null tracks (e.g. local files)
-    const t = item.track;
-    trackRows.push({
-      user_id: user.id,
-      spotify_id: t.id,
-      spotify_uri: t.uri,
-      title: t.name,
-      artist: t.artists.map((a) => a.name).join(", "),
-      album_title: t.album?.name ?? null,
-      album_spotify_id: t.album?.id ?? null,
-      album_cover_url: t.album?.images?.[0]?.url ?? null,
-      duration_ms: t.duration_ms,
-      is_liked: false,
-      added_at: item.added_at,
-    });
+    const data = (await res.json()) as PlaylistTracksPage;
+    total = data.total;
+    for (const item of data.items ?? []) {
+      if (!item.track) continue; // null tracks (e.g. local files)
+      const t = item.track;
+      trackRows.push({
+        user_id: user.id,
+        spotify_id: t.id,
+        spotify_uri: t.uri,
+        title: t.name,
+        artist: t.artists.map((a) => a.name).join(", "),
+        album_title: t.album?.name ?? null,
+        album_spotify_id: t.album?.id ?? null,
+        album_cover_url: t.album?.images?.[0]?.url ?? null,
+        duration_ms: t.duration_ms,
+        is_liked: false,
+        added_at: item.added_at,
+      });
+    }
+
+    apiCalls++;
+    if (data.next && data.items && data.items.length > 0) {
+      offset += 100;
+    } else {
+      hasMore = false;
+    }
   }
 
   if (trackRows.length === 0) {
@@ -180,7 +201,36 @@ export async function POST(request: NextRequest) {
     for (const row of data ?? []) trackInternalIds.push(row.id);
   }
 
-  // Assign genres/moods if provided
+  // Record this playlist as imported (for the ✓ tick on the playlists page).
+  // We store it in sync_state.imported_playlist_ids (text[]). If the column
+  // doesn't exist or the update fails, we silently skip — the import itself
+  // already succeeded.
+  try {
+    // First try to read the current imported_playlist_ids
+    const { data: stateRow } = await supabase
+      .from("sync_state")
+      .select("imported_playlist_ids")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const existingIds = (stateRow?.imported_playlist_ids as string[] | null) ?? [];
+    if (!existingIds.includes(playlistId)) {
+      const updatedIds = [...existingIds, playlistId];
+      await supabase
+        .from("sync_state")
+        .upsert(
+          { user_id: user.id, imported_playlist_ids: updatedIds },
+          { onConflict: "user_id" }
+        );
+    }
+  } catch {
+    // Column might not exist yet — not critical, the import succeeded
+  }
+
+  // Assign genres/moods if provided.
+  // Re-importing with different tags is fine: upsert with ignoreDuplicates
+  // keeps existing tags and adds new ones. The user can layer tags across
+  // multiple imports without losing previous assignments.
   if ((genreIds.length > 0 || moodIds.length > 0) && trackInternalIds.length > 0) {
     if (genreIds.length > 0) {
       const genreRows: Array<{ track_id: string; genre_id: string }> = [];

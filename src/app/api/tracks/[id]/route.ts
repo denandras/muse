@@ -151,7 +151,11 @@ export async function DELETE(
 
   let tokenRefresh = null as NextResponse | null
 
-  // If the track is in Spotify Liked Songs, remove it there first.
+  // If the track is in Spotify Liked Songs, try to remove it there first.
+  // This is best-effort: if the Spotify API fails (non-401 error), we still
+  // delete from the DB. The user wants the track gone from their library —
+  // a Spotify API hiccup shouldn't block that. The worst case is the track
+  // stays in Spotify Liked Songs but is removed from Muse.
   if (track?.is_liked && track.spotify_id) {
     const { token: accessToken, refreshedResponse: tr1 } =
       await getValidAccessToken(request)
@@ -183,13 +187,10 @@ export async function DELETE(
       }
 
       if (!res.ok) {
-        const text = await res.text()
-        const response = NextResponse.json(
-          { error: `Spotify delete error: ${res.status}`, detail: text },
-          { status: 502 }
+        // Log but don't block — still delete from DB
+        console.warn(
+          `[tracks DELETE] Spotify removal failed (${res.status}), proceeding with DB deletion`
         )
-        mergeRefreshedCookies(response, tokenRefresh)
-        return response
       }
     }
   }

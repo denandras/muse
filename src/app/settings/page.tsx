@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Loader2, LogOut, RefreshCw, Share2, Check, Copy } from "lucide-react";
 import type { User, UserSettings } from "@/lib/types";
 import SyncButton from "@/components/SyncButton";
+import CustomDropdown from "@/components/CustomDropdown";
 import type { SyncState } from "@/components/SyncButton";
 
 export default function SettingsPage() {
@@ -257,19 +258,20 @@ export default function SettingsPage() {
           <span className="text-xs text-cream/40">
             Which play count column to emphasize across the app.
           </span>
-          <select
+          <CustomDropdown
             value={settings.play_count_window}
-            onChange={(e) =>
+            options={[
+              { value: "all_time", label: "All time" },
+              { value: "this_year", label: "This year" },
+              { value: "30d", label: "Last 30 days" },
+            ]}
+            onChange={(v) =>
               updateSettings({
-                play_count_window: e.target.value as UserSettings["play_count_window"],
+                play_count_window: v as UserSettings["play_count_window"],
               })
             }
-            className="h-10 px-3 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/80"
-          >
-            <option value="all_time">All time</option>
-            <option value="this_year">This year</option>
-            <option value="30d">Last 30 days</option>
-          </select>
+            className="mt-0.5"
+          />
         </label>
 
         <label className="flex flex-col gap-1.5">
@@ -277,20 +279,20 @@ export default function SettingsPage() {
           <span className="text-xs text-cream/40">
             Initial view for the library page.
           </span>
-          <select
+          <CustomDropdown
             value={settings.default_view_mode}
-            onChange={(e) =>
+            options={[
+              { value: "both", label: "Both (albums + tracks)" },
+              { value: "albums", label: "Albums only" },
+              { value: "tracks", label: "Tracks only" },
+            ]}
+            onChange={(v) =>
               updateSettings({
-                default_view_mode: e.target
-                  .value as UserSettings["default_view_mode"],
+                default_view_mode: v as UserSettings["default_view_mode"],
               })
             }
-            className="h-10 px-3 rounded-xl bg-cream/[0.04] border border-cream/[0.06] text-sm text-cream/80"
-          >
-            <option value="both">Both (albums + tracks)</option>
-            <option value="albums">Albums only</option>
-            <option value="tracks">Tracks only</option>
-          </select>
+            className="mt-0.5"
+          />
         </label>
       </section>
 

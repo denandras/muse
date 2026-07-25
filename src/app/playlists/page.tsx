@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2,
   Download,
-  ChevronDown,
-  ChevronRight,
-  X,
   Check,
   Music,
   AlertCircle,
   RefreshCw,
+  ChevronRight,
+  X,
+  Tag,
+  Palette,
 } from "lucide-react";
 import type { Genre, Mood } from "@/lib/types";
 
@@ -30,13 +31,15 @@ export default function PlaylistsPage() {
   const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([]);
   const [genres, setGenres] = useState<Genre[]>([]);
   const [moods, setMoods] = useState<Mood[]>([]);
+  const [importedIds, setImportedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Which playlist's import menu is open (null = none)
+  const [importMenuId, setImportMenuId] = useState<string | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Import config for the expanded playlist
+  // Import config for the open import menu
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
 
@@ -44,11 +47,13 @@ export default function PlaylistsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [playlistsRes, genresRes, moodsRes] = await Promise.allSettled([
-        fetch("/api/spotify/playlists"),
-        fetch("/api/genres"),
-        fetch("/api/moods"),
-      ]);
+      const [playlistsRes, genresRes, moodsRes, importedRes] =
+        await Promise.allSettled([
+          fetch("/api/spotify/playlists"),
+          fetch("/api/genres"),
+          fetch("/api/moods"),
+          fetch("/api/spotify/imported-playlist-ids"),
+        ]);
 
       // Genres + moods are non-fatal if they fail.
       if (genresRes.status === "fulfilled") {
@@ -65,6 +70,14 @@ export default function PlaylistsPage() {
           setMoods(Array.isArray(m) ? m : m?.moods ?? []);
         } catch {
           /* ignore parse error */
+        }
+      }
+      if (importedRes.status === "fulfilled") {
+        try {
+          const i = await importedRes.value.json();
+          setImportedIds(new Set(i.importedIds ?? []));
+        } catch {
+          /* ignore */
         }
       }
 
@@ -103,7 +116,6 @@ export default function PlaylistsPage() {
       const rawList = Array.isArray(payload)
         ? (payload as SpotifyPlaylist[])
         : (obj.playlists as SpotifyPlaylist[] | undefined) ?? [];
-      // Ensure it's actually an array — API could return null/undefined
       const list = Array.isArray(rawList) ? rawList : [];
       setPlaylists(list);
       if (obj.error && !obj.playlists) {
@@ -137,9 +149,11 @@ export default function PlaylistsPage() {
         if (res.ok) {
           const msg =
             data.imported > 0
-              ? `Imported ${data.imported} new tracks (${data.total} total in playlist)`
+              ? `Imported ${data.imported} new track${data.imported === 1 ? "" : "s"} (${data.total} total in playlist)`
               : `All ${data.total} tracks already in library`;
           setToast(msg);
+          // Mark as imported locally
+          setImportedIds((prev) => new Set(prev).add(playlistId));
         } else {
           setToast(`Error: ${data.error ?? "Failed to import"}`);
         }
@@ -147,7 +161,7 @@ export default function PlaylistsPage() {
         setToast("Failed to import playlist");
       } finally {
         setImporting(null);
-        setExpandedId(null);
+        setImportMenuId(null);
         setSelectedGenres([]);
         setSelectedMoods([]);
         setTimeout(() => setToast(null), 4000);
@@ -168,24 +182,11 @@ export default function PlaylistsPage() {
     );
   };
 
-  // Flatten genres for display
-  const flatGenres: { id: string; label: string }[] = [];
-  const walk = (list: Genre[], prefix: string) => {
-    list.forEach((g) => {
-      const label = prefix ? `${prefix} / ${g.name}` : g.name;
-      flatGenres.push({ id: g.id, label });
-      if (g.children?.length) walk(g.children, label);
-    });
-  };
-  walk(genres, "");
+  // Build genre tree from flat list for the tree picker
+  const genreTree = useMemo(() => buildGenreTree(genres), [genres]);
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 flex flex-col gap-4">
-      <p className="text-sm text-cream/50 max-w-2xl">
-        Import tracks from your Spotify playlists into Muse. Optionally assign
-        genres and moods to all imported tracks at once.
-      </p>
-
       {loading ? (
         <PlaylistsSkeleton />
       ) : error ? (
@@ -193,9 +194,7 @@ export default function PlaylistsPage() {
           <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <div className="font-medium mb-0.5">Couldn&apos;t load playlists</div>
-            <div className="text-warning-light/80 mb-3">
-              {error}
-            </div>
+            <div className="text-warning-light/80 mb-3">{error}</div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
@@ -223,179 +222,200 @@ export default function PlaylistsPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {playlists.map((pl) => (
-            <div
-              key={pl.id}
-              className="rounded-xl bg-cream/[0.02] border border-cream/[0.04] overflow-hidden"
-            >
-              {/* Playlist row */}
-              <div
-                className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-cream/[0.04] transition-colors"
-                onClick={() => {
-                  setExpandedId(expandedId === pl.id ? null : pl.id);
-                  setSelectedGenres([]);
-                  setSelectedMoods([]);
-                }}
-              >
-                <button className="text-cream/40 flex-shrink-0">
-                  {expandedId === pl.id ? (
-                    <ChevronDown size={14} />
-                  ) : (
-                    <ChevronRight size={14} />
-                  )}
-                </button>
+          {playlists.map((pl) => {
+            const isImported = importedIds.has(pl.id);
+            const menuOpen = importMenuId === pl.id;
+            const isImporting = importing === pl.id;
 
-                {/* Cover */}
-                <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
-                  {pl.images?.[0]?.url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={pl.images[0].url}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
+            return (
+              <div
+                key={pl.id}
+                className="rounded-xl bg-cream/[0.02] border border-cream/[0.04] overflow-hidden"
+              >
+                {/* Playlist row — simple list, click to open import menu */}
+                <div
+                  className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-cream/[0.04] transition-colors"
+                  onClick={() => {
+                    if (menuOpen) {
+                      setImportMenuId(null);
+                      setSelectedGenres([]);
+                      setSelectedMoods([]);
+                    } else {
+                      setImportMenuId(pl.id);
+                      setSelectedGenres([]);
+                      setSelectedMoods([]);
+                    }
+                  }}
+                >
+                  {/* Cover */}
+                  <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-cream/[0.06]">
+                    {pl.images?.[0]?.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={pl.images[0].url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Music size={18} className="text-cream/20" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-cream/90 truncate">
+                      {pl.name}
+                    </div>
+                    <div className="text-xs text-cream/40 truncate">
+                      {pl.tracks?.total ?? 0} tracks
+                      {pl.owner?.display_name
+                        ? ` · by ${pl.owner.display_name}`
+                        : ""}
+                      {pl.public ? "" : " · Private"}
+                    </div>
+                  </div>
+
+                  {/* Import status / button */}
+                  {isImported && !menuOpen ? (
+                    <div className="flex items-center gap-1.5 text-xs text-success-light flex-shrink-0">
+                      <Check size={16} className="text-success" />
+                      <span className="hidden sm:inline">Imported</span>
+                    </div>
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Music size={18} className="text-cream/20" />
+                    <div className="flex items-center gap-1.5 text-xs text-cream/50 flex-shrink-0">
+                      <Download size={14} />
+                      <span className="hidden sm:inline">Import</span>
                     </div>
                   )}
+                  <ChevronRight
+                    size={14}
+                    className={`text-cream/30 transition-transform flex-shrink-0 ${
+                      menuOpen ? "rotate-90" : ""
+                    }`}
+                  />
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-cream/90 truncate">
-                    {pl.name}
-                  </div>
-                  <div className="text-xs text-cream/40 truncate">
-                    {pl.tracks?.total ?? 0} tracks
-                    {pl.owner?.display_name ? ` · by ${pl.owner.display_name}` : ""}
-                    {pl.public ? "" : " · Private"}
-                  </div>
-                </div>
-
-                {pl.description && (
-                  <div className="hidden sm:block text-xs text-cream/30 truncate max-w-xs">
-                    {pl.description}
-                  </div>
-                )}
-              </div>
-
-              {/* Expand: import controls */}
-              <AnimatePresence initial={false}>
-                {expandedId === pl.id && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                    className="overflow-hidden"
-                  >
-                    <div className="px-3 pb-3 pt-1 flex flex-col gap-3">
-                      {/* Genre selection */}
-                      <div>
-                        <div className="text-xs text-cream/50 mb-1.5">
-                          Assign genres (optional)
+                {/* Import menu (expand) */}
+                <AnimatePresence initial={false}>
+                  {menuOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-3 pb-3 pt-1 flex flex-col gap-3 border-t border-cream/[0.04]">
+                        <div className="text-xs text-cream/50 pt-1">
+                          {isImported
+                            ? "Update import — new tracks will be added, existing tracks stay (tags are layered)."
+                            : `Import all ${pl.tracks?.total ?? 0} tracks into your Muse library.`}
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {flatGenres.length === 0 ? (
+
+                        {/* Genre tree picker */}
+                        <div>
+                          <div className="text-xs text-cream/50 mb-1.5 flex items-center gap-1">
+                            <Tag size={11} /> Assign genres (optional)
+                          </div>
+                          {genreTree.length === 0 ? (
                             <span className="text-xs text-cream/30">
                               No genres yet — create some on the Genres page
                             </span>
                           ) : (
-                            flatGenres.map((g) => (
-                              <button
-                                key={g.id}
-                                onClick={() => toggleGenre(g.id)}
-                                className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-lg text-xs transition-colors ${
-                                  selectedGenres.includes(g.id)
-                                    ? "bg-primary/20 text-primary-light border border-primary/40"
-                                    : "bg-cream/[0.04] text-cream/50 border border-cream/[0.06] hover:bg-cream/[0.08]"
-                                }`}
-                              >
-                                {selectedGenres.includes(g.id) && (
-                                  <Check size={11} />
-                                )}
-                                {g.label}
-                              </button>
-                            ))
+                            <div className="rounded-xl bg-cream/[0.03] border border-cream/[0.04] p-2 max-h-48 overflow-y-auto">
+                              {genreTree.map((g) => (
+                                <GenreCheckItem
+                                  key={g.id}
+                                  genre={g}
+                                  depth={0}
+                                  selectedIds={new Set(selectedGenres)}
+                                  onToggle={toggleGenre}
+                                />
+                              ))}
+                            </div>
                           )}
                         </div>
-                      </div>
 
-                      {/* Mood selection */}
-                      <div>
-                        <div className="text-xs text-cream/50 mb-1.5">
-                          Assign moods (optional)
+                        {/* Mood picker */}
+                        <div>
+                          <div className="text-xs text-cream/50 mb-1.5 flex items-center gap-1">
+                            <Palette size={11} /> Assign moods (optional)
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {moods.length === 0 ? (
+                              <span className="text-xs text-cream/30">
+                                No moods yet — create some on the Moods page
+                              </span>
+                            ) : (
+                              moods.map((m) => (
+                                <button
+                                  key={m.id}
+                                  onClick={() => toggleMood(m.id)}
+                                  className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-lg text-xs transition-colors ${
+                                    selectedMoods.includes(m.id)
+                                      ? "bg-secondary/20 text-secondary-light border border-secondary/40"
+                                      : "bg-cream/[0.04] text-cream/50 border border-cream/[0.06] hover:bg-cream/[0.08]"
+                                  }`}
+                                >
+                                  {selectedMoods.includes(m.id) && (
+                                    <Check size={11} />
+                                  )}
+                                  {m.color && (
+                                    <span
+                                      className="w-2 h-2 rounded-full"
+                                      style={{ backgroundColor: m.color }}
+                                    />
+                                  )}
+                                  {m.name}
+                                </button>
+                              ))
+                            )}
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {moods.length === 0 ? (
-                            <span className="text-xs text-cream/30">
-                              No moods yet — create some on the Moods page
-                            </span>
-                          ) : (
-                            moods.map((m) => (
-                              <button
-                                key={m.id}
-                                onClick={() => toggleMood(m.id)}
-                                className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-lg text-xs transition-colors ${
-                                  selectedMoods.includes(m.id)
-                                    ? "bg-secondary/20 text-secondary-light border border-secondary/40"
-                                    : "bg-cream/[0.04] text-cream/50 border border-cream/[0.06] hover:bg-cream/[0.08]"
-                                }`}
-                              >
-                                {selectedMoods.includes(m.id) && (
-                                  <Check size={11} />
-                                )}
-                                {m.color && (
-                                  <span
-                                    className="w-2 h-2 rounded-full"
-                                    style={{ backgroundColor: m.color }}
-                                  />
-                                )}
-                                {m.name}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      </div>
 
-                      {/* Import button */}
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          onClick={() => handleImport(pl.id)}
-                          disabled={importing === pl.id}
-                          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-success/20 text-success-light border border-success/30 text-sm hover:bg-success/30 transition-colors disabled:opacity-50"
-                        >
-                          {importing === pl.id ? (
-                            <>
-                              <Loader2 size={14} className="animate-spin" />
-                              Importing…
-                            </>
-                          ) : (
-                            <>
-                              <Download size={14} />
-                              Import {pl.tracks?.total ?? 0} tracks
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setExpandedId(null);
-                            setSelectedGenres([]);
-                            setSelectedMoods([]);
-                          }}
-                          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cream/[0.04] text-cream/50 border border-cream/[0.06] text-sm hover:bg-cream/[0.08] transition-colors"
-                        >
-                          <X size={14} />
-                          Cancel
-                        </button>
+                        {/* Import button + cancel */}
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={() => handleImport(pl.id)}
+                            disabled={isImporting}
+                            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-success/20 text-success-light border border-success/30 text-sm hover:bg-success/30 transition-colors disabled:opacity-50"
+                          >
+                            {isImporting ? (
+                              <>
+                                <Loader2 size={14} className="animate-spin" />
+                                Importing…
+                              </>
+                            ) : (
+                              <>
+                                <Download size={14} />
+                                {isImported
+                                  ? "Update import"
+                                  : `Import ${pl.tracks?.total ?? 0} tracks`}
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setImportMenuId(null);
+                              setSelectedGenres([]);
+                              setSelectedMoods([]);
+                            }}
+                            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cream/[0.04] text-cream/50 border border-cream/[0.06] text-sm hover:bg-cream/[0.08] transition-colors"
+                          >
+                            <X size={14} />
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -416,6 +436,68 @@ export default function PlaylistsPage() {
   );
 }
 
+// Genre tree checkbox item for the import menu
+function GenreCheckItem({
+  genre,
+  depth,
+  selectedIds,
+  onToggle,
+}: {
+  genre: Genre;
+  depth: number;
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(depth < 1);
+  const hasChildren = (genre.children?.length ?? 0) > 0;
+  const selected = selectedIds.has(genre.id);
+
+  return (
+    <div>
+      <div
+        className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-cream/[0.04] cursor-pointer"
+        style={{ paddingLeft: depth * 16 + 8 }}
+        onClick={() => onToggle(genre.id)}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (hasChildren) setOpen((v) => !v);
+          }}
+          className="w-4 h-4 flex items-center justify-center text-cream/30 flex-shrink-0"
+        >
+          {hasChildren ? (open ? "▾" : "▸") : ""}
+        </button>
+        <div
+          className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-colors ${
+            selected
+              ? "bg-primary border-primary-hover"
+              : "border-cream/20"
+          }`}
+        >
+          {selected && <Check size={10} className="text-cream" />}
+        </div>
+        <span className={`text-sm ${selected ? "text-primary-light" : "text-cream/70"}`}>
+          {genre.name}
+        </span>
+      </div>
+      {hasChildren && open && (
+        <div>
+          {genre.children!.map((child) => (
+            <GenreCheckItem
+              key={child.id}
+              genre={child}
+              depth={depth + 1}
+              selectedIds={selectedIds}
+              onToggle={onToggle}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PlaylistsSkeleton() {
   return (
     <div className="flex flex-col gap-1.5">
@@ -424,7 +506,6 @@ function PlaylistsSkeleton() {
           key={i}
           className="rounded-xl bg-cream/[0.02] border border-cream/[0.04] px-3 py-3 flex items-center gap-3 animate-pulse"
         >
-          <div className="w-3.5 h-3.5 rounded bg-cream/[0.06]" />
           <div className="w-12 h-12 rounded-lg bg-cream/[0.06]" />
           <div className="flex-1 flex flex-col gap-1.5">
             <div className="h-3 w-1/3 rounded bg-cream/[0.06]" />
@@ -434,4 +515,26 @@ function PlaylistsSkeleton() {
       ))}
     </div>
   );
+}
+
+// Build tree from flat genre list
+function buildGenreTree(flat: Genre[]): Genre[] {
+  const map = new Map<string, Genre>();
+  flat.forEach((g) => map.set(g.id, { ...g, children: [] }));
+  const roots: Genre[] = [];
+  map.forEach((g) => {
+    if (g.parent_id && map.has(g.parent_id)) {
+      map.get(g.parent_id)!.children!.push(g);
+    } else {
+      roots.push(g);
+    }
+  });
+  const sortRec = (list: Genre[]) => {
+    list.sort(
+      (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)
+    );
+    list.forEach((g) => g.children && sortRec(g.children));
+  };
+  sortRec(roots);
+  return roots;
 }

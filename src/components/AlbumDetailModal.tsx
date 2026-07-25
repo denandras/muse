@@ -150,7 +150,12 @@ export default function AlbumDetailModal({
       if (res.ok) {
         onDelete?.(album.id);
         onClose();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Failed to delete: ${err.error ?? res.statusText}`);
       }
+    } catch {
+      alert("Failed to delete — network error");
     } finally {
       setDeleting(false);
     }

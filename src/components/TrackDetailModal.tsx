@@ -172,7 +172,12 @@ export default function TrackDetailModal({
       if (res.ok) {
         onDelete?.(track.id);
         onClose();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Failed to delete: ${err.error ?? res.statusText}`);
       }
+    } catch {
+      alert("Failed to delete — network error");
     } finally {
       setDeleting(false);
     }
