@@ -168,6 +168,8 @@ export default function LibraryPage() {
     trackLevelStars: true,
     sort: "added_at",
     sortDirection: "desc",
+    minDuration: null,
+    maxDuration: null,
   });
 
   const isDesktop = useIsDesktop();
@@ -351,6 +353,46 @@ export default function LibraryPage() {
   const showAlbums = view === "albums" || view === "both";
   const showTracks = view === "tracks" || view === "both";
 
+  // Compute min/max track duration across the library for the duration
+  // filter slider range. Uses tracks with a non-null duration_ms.
+  const durationRange = useMemo(() => {
+    let min = Infinity;
+    let max = 0;
+    for (const t of tracks) {
+      if (t.duration_ms && t.duration_ms > 0) {
+        if (t.duration_ms < min) min = t.duration_ms;
+        if (t.duration_ms > max) max = t.duration_ms;
+      }
+    }
+    if (min === Infinity) min = 0;
+    return { min: Math.floor(min / 1000), max: Math.ceil(max / 1000) };
+  }, [tracks]);
+
+  // Tracks grouped by album spotify id (for album expansion + duration filter).
+  // Sorted by disc_number, then track_number so album tracks appear in
+  // their actual album order (not import/added_at order).
+  // MUST be declared before filteredAlbums (which uses it for the duration
+  // filter) — useMemo TDZ ordering rule.
+  const tracksByAlbum = useMemo(() => {
+    const map = new Map<string, Track[]>();
+    tracks.forEach((t) => {
+      if (!t.album_spotify_id) return;
+      const arr = map.get(t.album_spotify_id) ?? [];
+      arr.push(t);
+      map.set(t.album_spotify_id, arr);
+    });
+    map.forEach((arr) => {
+      arr.sort((a, b) => {
+        const discDiff = (a.disc_number ?? 99) - (b.disc_number ?? 99);
+        if (discDiff !== 0) return discDiff;
+        const tnDiff = (a.track_number ?? 99) - (b.track_number ?? 99);
+        if (tnDiff !== 0) return tnDiff;
+        return a.title.localeCompare(b.title);
+      });
+    });
+    return map;
+  }, [tracks]);
+
   // Filter albums (computed first so filteredTracks can exclude
   // tracks that are already shown inside a displayed album row).
   const filteredAlbums = useMemo(() => {
@@ -385,10 +427,29 @@ export default function LibraryPage() {
         } else if (typeof filters.stars === "number") {
           if (a.stars === null || a.stars < filters.stars) return false;
         }
+        // Duration filter: album passes if any of its tracks are in range.
+        // When duration filter is active and the album has tracks in the
+        // tracksByAlbum map, check those. If no tracks found, let the album
+        // pass (don't hide albums just because we don't have track data).
+        if (filters.minDuration !== null || filters.maxDuration !== null) {
+          const albumTracks = a.spotify_id
+            ? tracksByAlbum.get(a.spotify_id) ?? []
+            : a.tracks ?? [];
+          if (albumTracks.length > 0) {
+            const anyInRange = albumTracks.some((t) => {
+              if (!t.duration_ms) return false;
+              const durSec = t.duration_ms / 1000;
+              if (filters.minDuration !== null && durSec < filters.minDuration) return false;
+              if (filters.maxDuration !== null && durSec > filters.maxDuration) return false;
+              return true;
+            });
+            if (!anyInRange) return false;
+          }
+        }
         return true;
       })
       .sort((a, b) => sortAlbums(a, b, filters.sort, filters.sortDirection));
-  }, [albums, filters, genreIncludeIds, genreExcludeIds, moodIncludeIds, moodExcludeIds]);
+  }, [albums, filters, genreIncludeIds, genreExcludeIds, moodIncludeIds, moodExcludeIds, tracksByAlbum]);
 
   // Filter tracks.
   // When showing both albums and tracks, hide tracks that belong to a
@@ -462,6 +523,12 @@ export default function LibraryPage() {
             if (t.stars === null || t.stars < filters.stars) return false;
           }
         }
+        // Duration filter (seconds)
+        if (t.duration_ms) {
+          const durSec = t.duration_ms / 1000;
+          if (filters.minDuration !== null && durSec < filters.minDuration) return false;
+          if (filters.maxDuration !== null && durSec > filters.maxDuration) return false;
+        }
         return true;
       })
       .sort((a, b) => sortTracks(a, b, filters.sort, filters.sortDirection));
@@ -494,35 +561,6 @@ export default function LibraryPage() {
       ),
     [unifiedList, safeUnifiedPage, pageSize]
   );
-
-  // Tracks grouped by album spotify id (for album expansion).
-  // Sorted by disc_number, then track_number so album tracks appear in
-  // their actual album order (not import/added_at order).
-  const tracksByAlbum = useMemo(() => {
-    const map = new Map<string, Track[]>();
-    tracks.forEach((t) => {
-      if (!t.album_spotify_id) return;
-      const arr = map.get(t.album_spotify_id) ?? [];
-      arr.push(t);
-      map.set(t.album_spotify_id, arr);
-    });
-    // Sort each album's tracks by disc_number, then track_number.
-    // When track_number/disc_number are NULL (pre-backfill), fall back to
-    // title as a deterministic tiebreaker so the order is stable across
-    // page loads (PostgREST returns tracks with the same added_at in an
-    // undefined order, making the sort non-deterministic without a
-    // tiebreaker).
-    map.forEach((arr) => {
-      arr.sort((a, b) => {
-        const discDiff = (a.disc_number ?? 99) - (b.disc_number ?? 99);
-        if (discDiff !== 0) return discDiff;
-        const tnDiff = (a.track_number ?? 99) - (b.track_number ?? 99);
-        if (tnDiff !== 0) return tnDiff;
-        return a.title.localeCompare(b.title);
-      });
-    });
-    return map;
-  }, [tracks]);
 
   // Mutation helpers.
   const rateTrack = useCallback(async (trackId: string, stars: number | null) => {
@@ -860,6 +898,8 @@ export default function LibraryPage() {
         onChange={updateFilters}
         genres={genres}
         moods={moods}
+        durationMin={durationRange.min}
+        durationMax={durationRange.max}
       />
 
       {/* Summary */}

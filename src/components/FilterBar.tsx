@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { ArrowUp, ArrowDown, Heart, ListMusic } from "lucide-react";
+import { useMemo, useState, useRef, useEffect } from "react";
+import { ArrowUp, ArrowDown, Heart, ListMusic, Clock } from "lucide-react";
 import type { Genre, Mood, SortKey, SortDirection } from "@/lib/types";
 import TriStateFilter, {
   type TriStateMap,
@@ -42,6 +42,9 @@ export interface FilterState {
   trackLevelStars: boolean;
   sort: SortKey;
   sortDirection: SortDirection;
+  /** Duration filter in seconds. null = no filter. */
+  minDuration: number | null;
+  maxDuration: number | null;
 }
 
 interface FilterBarProps {
@@ -49,6 +52,10 @@ interface FilterBarProps {
   onChange: (next: Partial<FilterState>) => void;
   genres: Genre[];
   moods: Mood[];
+  /** Min track duration in seconds across the library (for the duration slider range). */
+  durationMin?: number;
+  /** Max track duration in seconds across the library (for the duration slider range). */
+  durationMax?: number;
 }
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -77,6 +84,8 @@ export default function FilterBar({
   onChange,
   genres,
   moods,
+  durationMin = 0,
+  durationMax = 600,
 }: FilterBarProps) {
   // Build a tree from the flat genre list (the API returns flat rows,
   // not nested). Without this, every genre has children=undefined and
@@ -167,6 +176,15 @@ export default function FilterBar({
         <Heart size={15} className={filters.favoritesOnly ? "fill-secondary" : ""} strokeWidth={1.5} />
       </button>
 
+      {/* Duration filter */}
+      <DurationFilter
+        minDuration={filters.minDuration}
+        maxDuration={filters.maxDuration}
+        rangeMin={durationMin}
+        rangeMax={durationMax}
+        onChange={(min, max) => onChange({ minDuration: min, maxDuration: max })}
+      />
+
       {/* Sort + direction toggle */}
       <div className="flex items-center gap-1 sm:ml-auto">
         <CustomDropdown
@@ -185,6 +203,205 @@ export default function FilterBar({
           {filters.sortDirection === "asc" ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Duration filter ────────────────────────────────────────────────────────
+// A dropdown with a dual-thumb range slider. The slider range is set from
+// the actual min/max track durations in the library so the user can scrub
+// from shortest to longest. The values are in seconds.
+function formatDurationShort(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function DurationFilter({
+  minDuration,
+  maxDuration,
+  rangeMin,
+  rangeMax,
+  onChange,
+}: {
+  minDuration: number | null;
+  maxDuration: number | null;
+  rangeMin: number;
+  rangeMax: number;
+  onChange: (min: number | null, max: number | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState<"min" | "max" | null>(null);
+
+  // Current slider values (default to range bounds when null)
+  const minVal = minDuration ?? rangeMin;
+  const maxVal = maxDuration ?? rangeMax;
+  const isActive = minDuration !== null || maxDuration !== null;
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
+  // Handle drag on slider track
+  useEffect(() => {
+    if (!dragging || !open) return;
+
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      if (!sliderRef.current) return;
+      const rect = sliderRef.current.getBoundingClientRect();
+      const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const value = Math.round(rangeMin + ratio * (rangeMax - rangeMin));
+
+      if (dragging === "min") {
+        onChange(Math.min(value, maxVal - 5), maxDuration);
+      } else {
+        onChange(minDuration, Math.max(value, minVal + 5));
+      }
+    };
+
+    const handleUp = () => setDragging(null);
+
+    document.addEventListener("mousemove", handleMove);
+    document.addEventListener("mouseup", handleUp);
+    document.addEventListener("touchmove", handleMove);
+    document.addEventListener("touchend", handleUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMove);
+      document.removeEventListener("mouseup", handleUp);
+      document.removeEventListener("touchmove", handleMove);
+      document.removeEventListener("touchend", handleUp);
+    };
+  }, [dragging, open, minVal, maxVal, minDuration, maxDuration, rangeMin, rangeMax, onChange]);
+
+  const minPercent = ((minVal - rangeMin) / (rangeMax - rangeMin)) * 100;
+  const maxPercent = ((maxVal - rangeMin) / (rangeMax - rangeMin)) * 100;
+
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(null, null);
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border text-sm transition-colors cursor-pointer ${
+          isActive
+            ? "bg-primary/15 border-primary/30 text-primary-hover"
+            : "bg-cream/[0.04] border-cream/[0.06] text-cream/60 hover:text-cream/80"
+        }`}
+        aria-expanded={open}
+      >
+        <Clock size={14} />
+        <span className="select-none hidden sm:inline">Length</span>
+        {isActive && (
+          <span className="text-xs tabular-nums opacity-80">
+            {formatDurationShort(minVal)}–{formatDurationShort(maxVal)}
+          </span>
+        )}
+        {isActive && (
+          <span
+            role="button"
+            tabIndex={-1}
+            onClick={handleClear}
+            className="ml-0.5 -mr-1 w-4 h-4 flex items-center justify-center rounded hover:bg-cream/10 text-cream/40 hover:text-cream/80"
+            title="Clear length filter"
+          >
+            <span className="text-xs">×</span>
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1.5 left-0 min-w-[240px] max-w-[320px] rounded-xl border border-cream/10 bg-panel/95 backdrop-blur-xl shadow-2xl p-4">
+          <div className="text-xs text-cream/50 mb-3">Filter by track length</div>
+          {/* Dual-thumb slider */}
+          <div
+            ref={sliderRef}
+            className="relative h-6 flex items-center"
+          >
+            {/* Track */}
+            <div className="absolute left-0 right-0 h-1.5 rounded-full bg-cream/10" />
+            {/* Active range */}
+            <div
+              className="absolute h-1.5 rounded-full bg-primary/60"
+              style={{ left: `${minPercent}%`, right: `${100 - maxPercent}%` }}
+            />
+            {/* Min thumb */}
+            <div
+              onMouseDown={(e) => { e.preventDefault(); setDragging("min"); }}
+              onTouchStart={(e) => { e.preventDefault(); setDragging("min"); }}
+              className="absolute w-4 h-4 rounded-full bg-cream border-2 border-primary shadow-md cursor-grab active:cursor-grabbing -translate-x-1/2 z-10"
+              style={{ left: `${minPercent}%` }}
+            />
+            {/* Max thumb */}
+            <div
+              onMouseDown={(e) => { e.preventDefault(); setDragging("max"); }}
+              onTouchStart={(e) => { e.preventDefault(); setDragging("max"); }}
+              className="absolute w-4 h-4 rounded-full bg-cream border-2 border-primary shadow-md cursor-grab active:cursor-grabbing -translate-x-1/2 z-10"
+              style={{ left: `${maxPercent}%` }}
+            />
+          </div>
+          {/* Labels */}
+          <div className="flex justify-between mt-2 text-xs text-cream/50">
+            <span className="tabular-nums">{formatDurationShort(minVal)}</span>
+            <span className="tabular-nums">{formatDurationShort(maxVal)}</span>
+          </div>
+          {/* Quick presets */}
+          <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-cream/[0.06]">
+            <button
+              type="button"
+              onClick={() => onChange(null, null)}
+              className="h-7 px-2.5 rounded-lg text-xs bg-cream/[0.04] border border-cream/[0.06] text-cream/60 hover:bg-cream/[0.08] transition-colors"
+            >
+              Any
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(null, 180)}
+              className="h-7 px-2.5 rounded-lg text-xs bg-cream/[0.04] border border-cream/[0.06] text-cream/60 hover:bg-cream/[0.08] transition-colors"
+            >
+              ≤ 3:00
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(180, 300)}
+              className="h-7 px-2.5 rounded-lg text-xs bg-cream/[0.04] border border-cream/[0.06] text-cream/60 hover:bg-cream/[0.08] transition-colors"
+            >
+              3–5 min
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(300, null)}
+              className="h-7 px-2.5 rounded-lg text-xs bg-cream/[0.04] border border-cream/[0.06] text-cream/60 hover:bg-cream/[0.08] transition-colors"
+            >
+              5:00+
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

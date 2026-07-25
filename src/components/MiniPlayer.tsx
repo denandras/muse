@@ -47,6 +47,9 @@ export default function MiniPlayer() {
   const [volume, setVolumeState] = useState(0.5);
   const [muted, setMuted] = useState(false);
 
+  const [seeking, setSeeking] = useState(false);
+  const [seekValue, setSeekValue] = useState(0);
+
   const hasTrack = currentTrackTitle !== null;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -57,19 +60,25 @@ export default function MiniPlayer() {
   };
 
   // Next/Prev are disabled when: not Premium, OR at queue boundary.
-  // queueIndex is 0-based; queueLength is the total count.
-  // Single track (queueLength ≤ 1): both disabled.
-  // First track (queueIndex === 0): prev disabled.
-  // Last track (queueIndex === queueLength - 1): next disabled.
   const canPrev = isPremium && queueLength > 1 && queueIndex > 0;
   const canNext = isPremium && queueLength > 1 && queueIndex < queueLength - 1;
 
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (duration <= 0) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
-    seek(ratio * duration);
+  // Seek slider — supports both click and continuous drag on mobile/desktop.
+  // While dragging, show the seekValue instead of currentTime so the thumb
+  // follows the finger/mouse. On release, call seek() with the final value.
+  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSeeking(true);
+    setSeekValue(Number(e.target.value));
   };
+
+  const handleSeekCommit = () => {
+    if (duration > 0) {
+      seek((seekValue / 100) * duration);
+    }
+    setSeeking(false);
+  };
+
+  const displayProgress = seeking ? seekValue : progress;
 
   const handleVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = Number(e.target.value) / 100;
@@ -203,18 +212,37 @@ export default function MiniPlayer() {
               </div>
               </div>
 
-              {/* Seek bar + time (inside blurred container) */}
+              {/* Seek bar + time (inside blurred container) — draggable slider */}
               <div className="mt-2 flex items-center gap-2 px-1">
                 <span className="text-[10px] tabular-nums text-cream/40 w-9 text-right">
-                  {formatTime(currentTime)}
+                  {formatTime(seeking ? (seekValue / 100) * duration : currentTime)}
                 </span>
-                <div
-                  onClick={handleSeek}
-                  className="group relative flex-1 h-1.5 cursor-pointer rounded-full bg-cream/10"
-                >
+                <div className="relative flex-1 h-4 flex items-center">
+                  {/* Visual track background */}
+                  <div className="absolute left-0 right-0 h-1.5 rounded-full bg-cream/10 pointer-events-none" />
+                  {/* Filled portion */}
                   <div
-                    className="absolute left-0 top-0 h-full rounded-full bg-cream/70 transition-[width] duration-150 group-hover:bg-cream"
-                    style={{ width: `${progress}%` }}
+                    className="absolute left-0 h-1.5 rounded-full bg-cream/70 pointer-events-none"
+                    style={{ width: `${displayProgress}%` }}
+                  />
+                  {/* Native range input overlaid — transparent, handles all drag/click */}
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={displayProgress}
+                    onChange={handleSeekChange}
+                    onMouseUp={handleSeekCommit}
+                    onTouchEnd={handleSeekCommit}
+                    disabled={duration <= 0}
+                    className="absolute left-0 right-0 w-full h-4 opacity-0 cursor-pointer disabled:cursor-default"
+                    aria-label="Seek"
+                  />
+                  {/* Visible thumb */}
+                  <div
+                    className="absolute w-3 h-3 rounded-full bg-cream shadow-md pointer-events-none -translate-x-1/2 transition-transform"
+                    style={{ left: `${displayProgress}%`, transform: `translateX(-50%) scale(${seeking ? 1.3 : 1})` }}
                   />
                 </div>
                 <span className="text-[10px] tabular-nums text-cream/40 w-9">

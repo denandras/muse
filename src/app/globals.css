@@ -140,3 +140,27 @@ textarea {
 .muse-page-enter {
   animation: muse-page-enter 0.2s ease-out;
 }
+
+/* Seek slider — make the native range input touch-friendly on mobile.
+   The input is transparent (opacity-0) and overlays a custom track+thumb.
+   This ensures it picks up touch/drag events properly on all browsers. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
