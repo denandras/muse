@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
   }
 
   const fetchPage = async (token: string, offset: number) => {
-    const url = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&offset=${offset}`;
+    const url = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&offset=${offset}&market=from_token`;
     return fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      console.error("[playlist-tracks] Spotify API error:", res.status, "playlist:", playlistId, "body:", text.slice(0, 500));
       return NextResponse.json(
         { error: `Spotify API error ${res.status}`, detail: text.slice(0, 200) },
         { status: res.status }
