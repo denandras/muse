@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
   }
 
   const fetchPage = async (token: string, offset: number) => {
-    const url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=${offset}&additional_types=track`;
+    const url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=${offset}`;
     return fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });

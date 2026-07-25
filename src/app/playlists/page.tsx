@@ -51,6 +51,8 @@ export default function PlaylistsPage() {
   const [importing, setImporting] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  const [tracksError, setTracksError] = useState<string | null>(null);
+
   // Track list preview state
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [playlistTracks, setPlaylistTracks] = useState<PlaylistTrack[]>([]);
@@ -201,6 +203,7 @@ export default function PlaylistsPage() {
   // Fetch track list for a playlist (for preview + play)
   const fetchPlaylistTracks = useCallback(async (playlistId: string) => {
     setTracksLoading(true);
+    setTracksError(null);
     try {
       const res = await fetch(
         `/api/spotify/playlist-tracks?playlist_id=${encodeURIComponent(playlistId)}`
@@ -208,9 +211,13 @@ export default function PlaylistsPage() {
       const data = await res.json();
       if (res.ok && data.tracks) {
         setPlaylistTracks(data.tracks);
+      } else {
+        setTracksError(data.error ?? `Error ${res.status}`);
+        setPlaylistTracks([]);
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      setTracksError(String(e));
+      setPlaylistTracks([]);
     } finally {
       setTracksLoading(false);
     }
@@ -221,9 +228,11 @@ export default function PlaylistsPage() {
       if (expandedId === pl.id) {
         setExpandedId(null);
         setPlaylistTracks([]);
+        setTracksError(null);
       } else {
         setExpandedId(pl.id);
         setPlaylistTracks([]);
+        setTracksError(null);
         void fetchPlaylistTracks(pl.id);
       }
     },
@@ -456,6 +465,10 @@ export default function PlaylistsPage() {
                           <div className="flex items-center gap-2 py-4 text-sm text-cream/40">
                             <Loader2 size={14} className="animate-spin" />
                             Loading tracks…
+                          </div>
+                        ) : tracksError ? (
+                          <div className="py-4 text-sm text-secondary-light">
+                            {tracksError}
                           </div>
                         ) : playlistTracks.length === 0 ? (
                           <div className="py-4 text-sm text-cream/30">
