@@ -211,6 +211,9 @@ export default function PlaylistsPage() {
       const data = await res.json();
       if (res.ok && data.tracks) {
         setPlaylistTracks(data.tracks);
+        if (data.followed) {
+          setTracksError("Followed playlists can't be previewed — Spotify only allows track access for playlists you own or collaborate on.");
+        }
       } else {
         setTracksError(data.error ?? `Error ${res.status}`);
         setPlaylistTracks([]);

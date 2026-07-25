@@ -67,36 +67,30 @@ export async function POST(request: NextRequest) {
     added_at: string;
   }
 
-  interface TracksPage {
+  interface ItemsPage {
     items: PlaylistTrack[];
     total: number;
     next: string | null;
     offset: number;
   }
 
-  interface PlaylistResponse {
-    tracks: TracksPage;
-  }
-
-  // Use GET /playlists/{id} instead of /playlists/{id}/items or /tracks.
-  // The /items endpoint 403s on followed playlists (only works for owned/
-  // collaborative). The /tracks endpoint is deprecated and 403s for everyone.
-  // GET /playlists/{id} works for ANY playlist and returns tracks inline.
-  const fields = "tracks(total,limit,offset,next,items(track(id,uri,name,duration_ms,artists(name),album(id,name,images(url))),added_at))";
-  const firstUrl = `https://api.spotify.com/v1/playlists/${playlistId}?fields=${encodeURIComponent(fields)}`;
-
+  // Use GET /playlists/{id}/items — the new (non-deprecated) endpoint.
+  // Only works for playlists the user owns or collaborates on.
+  // Followed playlists will 403 — we return an error to the client.
   const fetchUrl = async (url: string, token: string) => {
     return fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
   };
 
+  const firstUrl = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&offset=0`;
+
   const trackRows: Array<Record<string, unknown>> = [];
   let total = 0;
   let apiCalls = 0;
   const MAX_API_CALLS = 40; // safety valve
 
-  // Fetch first page from GET /playlists/{id}
+  // Fetch first page
   let res = await fetchUrl(firstUrl, accessToken);
 
   if (res.status === 401) {
@@ -108,6 +102,15 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (res.status === 403) {
+    const response = NextResponse.json(
+      { error: "This is a followed playlist. Spotify only allows importing playlists you own or collaborate on." },
+      { status: 403 }
+    );
+    mergeRefreshedCookies(response, tokenRefreshResponse);
+    return response;
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     return NextResponse.json(
@@ -116,8 +119,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const firstData = (await res.json()) as PlaylistResponse;
-  total = firstData.tracks.total;
+  const firstData = (await res.json()) as ItemsPage;
+  total = firstData.total;
 
   const processItems = (items: PlaylistTrack[]) => {
     for (const item of items) {
@@ -139,11 +142,11 @@ export async function POST(request: NextRequest) {
     }
   };
 
-  processItems(firstData.tracks.items ?? []);
+  processItems(firstData.items ?? []);
   apiCalls++;
 
-  // Follow tracks.next for additional pages
-  let nextUrl: string | null = firstData.tracks.next;
+  // Follow next URLs for pagination
+  let nextUrl: string | null = firstData.next;
 
   while (nextUrl && apiCalls < MAX_API_CALLS) {
     let pageRes = await fetchUrl(nextUrl, accessToken);
@@ -163,7 +166,7 @@ export async function POST(request: NextRequest) {
       break;
     }
 
-    const pageData = (await pageRes.json()) as TracksPage;
+    const pageData = (await pageRes.json()) as ItemsPage;
     processItems(pageData.items ?? []);
     apiCalls++;
     nextUrl = pageData.next;

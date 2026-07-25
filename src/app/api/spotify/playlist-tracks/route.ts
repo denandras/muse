@@ -4,15 +4,18 @@ import { getCurrentUser, getValidAccessToken, refreshOn401, mergeRefreshedCookie
 /**
  * GET /api/spotify/playlist-tracks?playlist_id=xxx
  *
- * Fetches all tracks from a Spotify playlist using GET /playlists/{id}.
- * This endpoint works for ANY playlist (owned, followed, collaborative) —
- * unlike /playlists/{id}/items which 403s on followed playlists, and
- * /playlists/{id}/tracks which is deprecated and 403s for everyone.
+ * Fetches all tracks from a Spotify playlist.
  *
- * GET /playlists/{id} returns the first page of tracks inline. For larger
- * playlists, we follow the tracks.next URL for pagination.
+ * Spotify has two relevant endpoints:
+ * - GET /playlists/{id}/items — the new endpoint, but ONLY works for playlists
+ *   the user owns or collaborates on. Followed playlists return 403.
+ * - GET /playlists/{id} — returns playlist metadata, sometimes with tracks inline.
  *
- * Returns a lightweight array of { id, uri, name, artist, album, duration_ms, cover_url }
+ * Strategy: try /items first (works for owned/collaborative). If 403, the playlist
+ * is followed — return an empty tracks array with a flag so the UI can show
+ * "followed playlists can't be previewed" instead of an error.
+ *
+ * Returns: { tracks: Array<{id,uri,name,artist,album,duration_ms,cover_url}> }
  */
 export const maxDuration = 120;
 
@@ -50,41 +53,51 @@ export async function GET(request: NextRequest) {
     } | null;
   }
 
-  interface TracksPage {
+  interface ItemsPage {
     items: TrackItem[];
     total: number;
-    limit: number;
-    offset: number;
     next: string | null;
-    href: string;
+    offset: number;
+    limit: number;
   }
 
-  interface PlaylistResponse {
-    tracks: TracksPage;
-  }
+  const extractTracks = (items: TrackItem[]) => {
+    const tracks: Array<{
+      id: string;
+      uri: string;
+      name: string;
+      artist: string;
+      album: string;
+      duration_ms: number;
+      cover_url: string | null;
+    }> = [];
+    for (const item of items) {
+      if (!item.track) continue;
+      const t = item.track;
+      tracks.push({
+        id: t.id,
+        uri: t.uri,
+        name: t.name,
+        artist: t.artists.map((a) => a.name).join(", "),
+        album: t.album?.name ?? "",
+        duration_ms: t.duration_ms,
+        cover_url: t.album?.images?.[0]?.url ?? null,
+      });
+    }
+    return tracks;
+  };
 
-  const tracks: Array<{
-    id: string;
-    uri: string;
-    name: string;
-    artist: string;
-    album: string;
-    duration_ms: number;
-    cover_url: string | null;
-  }> = [];
-
-  // Step 1: GET /playlists/{id} — returns first page of tracks inline.
-  // Use fields to reduce payload — we only need track data.
-  const fields = "tracks(total,limit,offset,next,items(track(id,uri,name,duration_ms,artists(name),album(id,name,images(url)))))";
-  const firstUrl = `https://api.spotify.com/v1/playlists/${playlistId}?fields=${encodeURIComponent(fields)}`;
-
+  // Use GET /playlists/{id}/items — the new (non-deprecated) endpoint.
+  // Only works for playlists the user owns or collaborates on.
+  // Followed playlists will 403 — we handle that gracefully.
   const fetchPage = async (url: string, token: string) => {
     return fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
   };
 
-  // Fetch first page
+  const firstUrl = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&offset=0`;
+
   let res = await fetchPage(firstUrl, accessToken);
 
   if (res.status === 401) {
@@ -96,6 +109,17 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  if (res.status === 403) {
+    // Followed playlist — Spotify's /items endpoint only works for owned/
+    // collaborative playlists. Return empty tracks so the UI doesn't crash.
+    const response = NextResponse.json({
+      tracks: [],
+      followed: true,
+    });
+    mergeRefreshedCookies(response, tokenRefreshResponse);
+    return response;
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     console.error("[playlist-tracks] Spotify API error:", res.status, "playlist:", playlistId, "body:", text.slice(0, 500));
@@ -105,26 +129,11 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const firstData = (await res.json()) as PlaylistResponse;
-  const firstTracks = firstData.tracks;
+  const firstData = (await res.json()) as ItemsPage;
+  const tracks = extractTracks(firstData.items ?? []);
 
-  // Process first page
-  for (const item of firstTracks.items ?? []) {
-    if (!item.track) continue;
-    const t = item.track;
-    tracks.push({
-      id: t.id,
-      uri: t.uri,
-      name: t.name,
-      artist: t.artists.map((a) => a.name).join(", "),
-      album: t.album?.name ?? "",
-      duration_ms: t.duration_ms,
-      cover_url: t.album?.images?.[0]?.url ?? null,
-    });
-  }
-
-  // Step 2: Follow tracks.next for additional pages (if any)
-  let nextUrl: string | null = firstTracks.next;
+  // Follow next URLs for pagination
+  let nextUrl: string | null = firstData.next;
   let apiCalls = 1;
   const MAX_API_CALLS = 20;
 
@@ -146,21 +155,8 @@ export async function GET(request: NextRequest) {
       break;
     }
 
-    const pageData = (await pageRes.json()) as TracksPage;
-    for (const item of pageData.items ?? []) {
-      if (!item.track) continue;
-      const t = item.track;
-      tracks.push({
-        id: t.id,
-        uri: t.uri,
-        name: t.name,
-        artist: t.artists.map((a) => a.name).join(", "),
-        album: t.album?.name ?? "",
-        duration_ms: t.duration_ms,
-        cover_url: t.album?.images?.[0]?.url ?? null,
-      });
-    }
-
+    const pageData = (await pageRes.json()) as ItemsPage;
+    tracks.push(...extractTracks(pageData.items ?? []));
     apiCalls++;
     nextUrl = pageData.next;
   }
