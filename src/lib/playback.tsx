@@ -224,6 +224,10 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   // without creating a circular dependency (spotifyPlayTrack has [] deps).
   const initPlayerRef = useRef<(() => void) | null>(null);
 
+  // Ref to startSpotifyPositionPolling so spotifyPlayTrack can start the poll
+  // after a successful play without creating a circular useCallback dependency.
+  const startPollRef = useRef<(() => void) | null>(null);
+
   // ── Position polling for Spotify ─────────────────────────────────────────
   // The Spotify SDK only fires player_state_changed on state transitions
   // (play/pause/seek), not continuously. We poll getCurrentState() every 500ms
@@ -320,6 +324,30 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     }
 
     currentSpotifyUriRef.current = spotifyUri;
+
+    // ── Force-start playback + polling ────────────────────────────────
+    // The PUT /me/player/play call loads the track on the device, but on
+    // many browsers the SDK fires player_state_changed with paused:true
+    // immediately after (a known quirk). Since position polling is only
+    // started from the state-change handler when !state.paused, the poll
+    // never starts on that first play — so stall detection (which lives
+    // inside the poll) never runs, and the user is stuck with a "play
+    // then immediately stop" experience requiring a second click.
+    //
+    // Fix: after the PUT succeeds, proactively (a) call player.resume()
+    // to nudge the SDK into actually outputting audio, and (b) start the
+    // position poll ourselves so stall detection is active regardless of
+    // what the state-change handler does.
+    //
+    // We use startPollRef instead of a direct dependency to avoid a
+    // circular useCallback dependency (startSpotifyPositionPolling
+    // already depends on spotifyPlayTrack for stall recovery + auto-advance).
+    try {
+      await spotifyPlayerRef.current?.resume();
+    } catch (e) {
+      console.warn("[Muse Playback] resume() after play failed (non-fatal):", e);
+    }
+    startPollRef.current?.();
   }, []);
 
   const startSpotifyPositionPolling = useCallback(() => {
@@ -583,20 +611,15 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
               }
             }
 
-            if (!state.paused) {
-              startSpotifyPositionPolling();
-            }
-            // Don't stop polling on state.paused === true.
-            // The Spotify SDK can briefly fire paused:true right after
-            // starting playback (a known quirk on some browsers), then
-            // immediately fire paused:false again. If we stop the poll on
-            // the first paused:true, playback appears to "start and stop
-            // right after start" — the poll dies, stall detection can't
-            // run, and the user has to click play again.
-            // Instead, let the poll keep running. It reads getCurrentState()
-            // directly each tick — if the track is genuinely paused, the
-            // position simply won't advance. The stall detection handles
-            // truly stalled playback after ~3s.
+            // Always start the position poll on any state change.
+            // Previously this was gated on !state.paused, but the SDK can
+            // fire paused:true on the initial play (known quirk) and never
+            // fire a subsequent paused:false — leaving the poll stopped and
+            // stall detection dead. The poll is safe to run while paused
+            // (it just reads getCurrentState() each tick); it won't false-
+            // trigger stall recovery because the position check is gated on
+            // !state.paused.
+            startSpotifyPositionPolling();
           }
         );
 
@@ -652,6 +675,10 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   // Keep initPlayerRef in sync so spotifyPlayTrack's 404 handler can call it
   // without creating a circular dependency (spotifyPlayTrack has [] deps).
   initPlayerRef.current = initPlayer;
+
+  // Keep startPollRef in sync so spotifyPlayTrack can start the position poll
+  // after a successful play (same circular-dependency avoidance pattern).
+  startPollRef.current = startSpotifyPositionPolling;
 
   // ── Tab visibility listener ─────────────────────────────────────────────
   // When the tab returns to foreground after being in the background, the
