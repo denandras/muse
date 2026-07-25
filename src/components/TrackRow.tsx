@@ -204,6 +204,7 @@ export default function TrackRow({
         <FavoriteToggle
           isFavorite={track.is_favorite}
           onChange={readOnly ? undefined : onToggleFavorite}
+          readOnly={readOnly}
         />
 
         {/* Stars */}

@@ -3,7 +3,7 @@ import { Music2, Lock } from "lucide-react";
 import type { Metadata } from "next";
 import { supabaseServer } from "@/lib/supabase-server";
 import type { Track, Album, Genre, Mood } from "@/lib/types";
-import MusicSection from "./MusicSection";
+import ProfileMusicExplorer from "./ProfileMusicExplorer";
 
 interface ProfileData {
   user: {
@@ -12,8 +12,8 @@ interface ProfileData {
     avatar_url: string | null;
     profile_public: boolean;
   };
-  genres: { id: string; name: string; track_count: number }[];
-  moods: { id: string; name: string; color: string | null; track_count: number }[];
+  genres: Genre[];
+  moods: Mood[];
   totals: { tracks: number; albums: number };
   tracks: Track[];
   albums: Album[];
@@ -48,38 +48,61 @@ async function getProfileData(userId: string): Promise<ProfileData | null> {
       albums: albumsCount.count ?? 0,
     };
 
-    // Genres with track counts via track_genres join
+    // Genres with full hierarchy info (parent_id, depth, sort_order) +
+    // track counts via track_genres join. The FilterBar's TriStateFilter
+    // needs parent_id + depth to build the tree, so we fetch the full
+    // genre shape (not just id/name/track_count like the old profile page).
     const { data: genresRows } = await supabaseServer
       .from("genres")
-      .select("id, name, track_genres(track_id)")
+      .select(
+        "id, user_id, name, parent_id, depth, sort_order, spotify_playlist_id, track_genres(track_id)"
+      )
       .eq("user_id", user.id);
 
-    const genres = (genresRows ?? [])
+    const genres: Genre[] = (genresRows ?? [])
       .map((g: Record<string, unknown>) => ({
         id: g.id as string,
+        user_id: g.user_id as string,
         name: g.name as string,
+        parent_id: (g.parent_id as string | null) ?? null,
+        depth: (g.depth as number) ?? 0,
+        sort_order: (g.sort_order as number) ?? 0,
+        spotify_playlist_id: (g.spotify_playlist_id as string | null) ?? null,
         track_count:
           (g.track_genres as Array<unknown> | null)?.length ?? 0,
+        children: [],
       }))
-      .filter((g) => g.track_count > 0)
-      .sort((a, b) => b.track_count - a.track_count);
+      .filter((g) => (g as Genre & { track_count: number }).track_count > 0)
+      .sort(
+        (a, b) =>
+          ((b as Genre & { track_count: number }).track_count ?? 0) -
+          ((a as Genre & { track_count: number }).track_count ?? 0)
+      ) as Genre[];
 
-    // Moods with track counts via track_moods join
+    // Moods with full shape + track counts via track_moods join.
     const { data: moodsRows } = await supabaseServer
       .from("moods")
-      .select("id, name, color, track_moods(track_id)")
+      .select(
+        "id, user_id, name, color, sort_order, track_moods(track_id)"
+      )
       .eq("user_id", user.id);
 
-    const moods = (moodsRows ?? [])
+    const moods: Mood[] = (moodsRows ?? [])
       .map((m: Record<string, unknown>) => ({
         id: m.id as string,
+        user_id: m.user_id as string,
         name: m.name as string,
         color: (m.color as string | null) ?? null,
+        sort_order: (m.sort_order as number) ?? 0,
         track_count:
           (m.track_moods as Array<unknown> | null)?.length ?? 0,
       }))
-      .filter((m) => m.track_count > 0)
-      .sort((a, b) => b.track_count - a.track_count);
+      .filter((m) => (m as Mood & { track_count: number }).track_count > 0)
+      .sort(
+        (a, b) =>
+          ((b as Mood & { track_count: number }).track_count ?? 0) -
+          ((a as Mood & { track_count: number }).track_count ?? 0)
+      ) as Mood[];
 
     // Fetch tracks with genre/mood joins (paginated to bypass 1000-row cap)
     const trackFields =
@@ -293,7 +316,12 @@ export default async function PublicProfilePage({
         )}
       </section>
 
-      <MusicSection tracks={tracks} albums={albums} />
+      <ProfileMusicExplorer
+        tracks={tracks}
+        albums={albums}
+        genres={genres}
+        moods={moods}
+      />
 
       <p className="text-xs text-cream/30 text-center">
         Read-only public profile · Powered by Muse

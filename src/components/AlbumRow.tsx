@@ -28,6 +28,8 @@ interface AlbumRowProps {
   onOpenAlbumDetail?: () => void;
   /** ID of the currently playing track, used to highlight the album containing it. */
   currentTrackId?: string | null;
+  /** When true, star rating, favorite toggle, and edit pencil are read-only (no interaction). Used on public profile pages. */
+  readOnly?: boolean;
 }
 
 export default function AlbumRow({
@@ -40,6 +42,7 @@ export default function AlbumRow({
   onOpenTrackDetail,
   onOpenAlbumDetail,
   currentTrackId,
+  readOnly = false,
 }: AlbumRowProps) {
   const [expanded, setExpanded] = useState(false);
   const { play, playAlbum: playAlbumContext } = usePlayback();
@@ -136,7 +139,7 @@ export default function AlbumRow({
             >
               {album.title}
             </button>
-            {onOpenAlbumDetail && (
+            {onOpenAlbumDetail && !readOnly && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -169,9 +172,9 @@ export default function AlbumRow({
 
         <FavoriteToggle
           isFavorite={album.is_favorite}
-          onChange={onToggleFavorite}
+          onChange={readOnly ? undefined : onToggleFavorite}
         />
-        <StarRating value={album.stars} onChange={onRate} />
+        <StarRating value={album.stars} onChange={readOnly ? undefined : onRate} readOnly={readOnly} />
 
         {/* Play album */}
         <button
@@ -223,6 +226,7 @@ export default function AlbumRow({
                     <TrackRow
                       key={t.id}
                       track={t}
+                      readOnly={readOnly}
                       // Album context: use Spotify's track_number (the real
                       // position on the disc). Fallback to 1-based index for
                       // pre-backfill rows where track_number is null.
