@@ -86,18 +86,28 @@ body {
   color: var(--cream);
 }
 
-/* Glass panel base — translucent, blurred, warm-tinted */
-.glass {
+/* Glass panel base — translucent, blurred, warm-tinted.
+   Uses Tailwind v4's @utility + the --tw-backdrop-* variable system so
+   Lightning CSS preserves both -webkit-backdrop-filter AND backdrop-filter.
+   Defining backdrop-filter with a literal value causes Lightning CSS to
+   strip the standard (unprefixed) property — only the -webkit- prefix survives.
+   By setting --tw-backdrop-blur and using the same var() chain as Tailwind's
+   own backdrop-blur utilities, both prefixed and standard properties survive. */
+@utility glass {
+  --tw-backdrop-blur: blur(20px);
+  --tw-backdrop-saturate: saturate(1.8);
+  -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+  backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
   background: var(--glass-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--glass-border);
 }
 
-.glass-strong {
+@utility glass-strong {
+  --tw-backdrop-blur: blur(30px);
+  --tw-backdrop-saturate: saturate(1.8);
+  -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+  backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
   background: rgba(245, 240, 232, 0.05);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
   border: 1px solid rgba(245, 240, 232, 0.08);
 }
 
